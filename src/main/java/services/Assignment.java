@@ -92,6 +92,8 @@ public class Assignment {
  <div id='viewSubmissionsDiv'></div>
  <p>Enter problem URLs or IDs, one per line:</p>
  <textarea style="display: block; width: 90%%;" id="problems" rows="10"></textarea>
+ <p>Allowed CodeCheck IDs, one per line (leave blank to allow any ID a student types in):</p>
+ <textarea style="display: block; width: 90%%;" id="roster" rows="10"></textarea>
  <div id="deadlineDiv">
     <p>Deadline (<b>Local Time</b>):</p>
     <input type="datetime-local" id="deadlineDate" name="date"/>
@@ -215,7 +217,7 @@ public class Assignment {
    <div id="studentInstructions">
 	   <p>Your CodeCheck ID: <span class="ccid"></span></p>
 	   <ul id="ccidBullets">
-	     <li>Share this ID with your professor</li>
+	     <li>Enter this same ID on any computer to resume your work</li>
 	     <li id="clearID">If you work on a shared computer, clear the ID after you are done</li>
 	   </ul>
 	   <dl>
@@ -242,8 +244,86 @@ public class Assignment {
 </body>
 </html>    		
 """;
-	
-    
+
+    // Does this instructor-assigned ID already have saved work for this assignment?
+    // Used to confirm a student isn't landing on someone else's submission by typo.
+    public boolean hasWork(String assignmentID, String ccid) throws IOException {
+        return storageConn.readWork(assignmentID, ccid + "/" + ccid) != null;
+    }
+
+    // If the instructor uploaded a roster for this assignment, only those exact IDs
+    // are accepted -- this both rejects typos immediately (instead of silently
+    // creating an orphaned submission) and prevents an unbounded number of storage
+    // records being created by IDs nobody was ever given.
+    // No roster uploaded: any validly-formatted ID is allowed (today's behavior).
+    public boolean isAllowedID(String assignmentID, String ccid) throws IOException {
+        ObjectNode assignmentNode = storageConn.readAssignment(assignmentID);
+        if (assignmentNode == null) throw new ServiceException("Assignment not found");
+        if (!assignmentNode.has("roster") || assignmentNode.get("roster").isEmpty())
+            return true;
+        for (JsonNode idNode : assignmentNode.get("roster"))
+            if (idNode.asText().equals(ccid)) return true;
+        return false;
+    }
+
+    public String enterID(String assignmentID, String message) throws IOException {
+        if (storageConn.readAssignment(assignmentID) == null)
+            throw new ServiceException("Assignment not found");
+        return enterIDHTML.formatted(message == null ? "" : message);
+    }
+
+    private static String enterIDHTML = """
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <link rel="stylesheet" href="/assets/codecheck.css"/>
+    <title>Enter Your CodeCheck ID</title>
+</head>
+<body>
+  <h1>Enter Your CodeCheck ID</h1>
+  <p>Enter the CodeCheck ID your instructor gave you. Use the same ID every time to resume your work, on any computer.</p>
+  <p style="color: red;">%s</p>
+  <form method="GET" action="">
+    <p>Your ID:</p>
+    <input type="text" name="ccid" autofocus="autofocus" required="required" />
+    <p>Enter it again to confirm:</p>
+    <input type="text" name="ccid2" required="required" />
+    <input type="submit" value="Continue" />
+  </form>
+</body>
+</html>
+""";
+
+    public String confirmID(String prefix, String assignmentID, String ccid) throws IOException {
+        if (storageConn.readAssignment(assignmentID) == null)
+            throw new ServiceException("Assignment not found");
+        String safeCcid = org.apache.commons.text.StringEscapeUtils.escapeHtml4(ccid);
+        String continueURL = prefix + "/assignment/" + assignmentID + "?ccid="
+                + URLEncoder.encode(ccid, "UTF-8") + "&confirm=true";
+        String backURL = prefix + "/assignment/" + assignmentID;
+        return confirmIDHTML.formatted(safeCcid, continueURL, safeCcid, backURL);
+    }
+
+    private static String confirmIDHTML = """
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <link rel="stylesheet" href="/assets/codecheck.css"/>
+    <title>Confirm Your CodeCheck ID</title>
+</head>
+<body>
+  <h1>Welcome back, %s?</h1>
+  <p>This CodeCheck ID already has saved work for this assignment.</p>
+  <p><a href="%s">Yes, continue as %s</a></p>
+  <p><a href="%s">This isn't my ID &mdash; let me enter a different one</a></p>
+</body>
+</html>
+""";
+
     public String viewSubmissions(String assignmentID, String editKey)
             throws IOException {
         ObjectNode assignmentNode = storageConn.readAssignment(assignmentID);
@@ -300,6 +380,8 @@ public class Assignment {
      */
     public ObjectNode saveAssignment(String prefix, JsonNode params) throws IOException {
         ((ObjectNode) params).set("problems", parseAssignment(params.get("problems").asText()));
+        if (params.has("roster"))
+            ((ObjectNode) params).set("roster", parseRoster(params.get("roster").asText()));
         String assignmentID;
         String editKey;
         ObjectNode assignmentNode;
@@ -344,6 +426,16 @@ public class Assignment {
         return null;
     }
     
+    public ArrayNode parseRoster(String roster) {
+        ArrayNode result = JsonNodeFactory.instance.arrayNode();
+        if (roster == null) return result;
+        for (String line : roster.split("\\r?\\n")) {
+            String trimmed = line.trim();
+            if (!trimmed.isEmpty()) result.add(trimmed);
+        }
+        return result;
+    }
+
     public ArrayNode parseAssignment(String assignment) {
         if (assignment == null || assignment.trim().isEmpty()) 
             throw new ServiceException("No assignments");

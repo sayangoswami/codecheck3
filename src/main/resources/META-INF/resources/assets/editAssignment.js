@@ -35,8 +35,10 @@ window.addEventListener('DOMContentLoaded', () => {
   })
 
   const responseDiv = document.getElementById('response')
-  if ('problems' in assignment)  
+  if ('problems' in assignment)
     document.getElementById('problems').value = format(assignment.problems)
+  if ('roster' in assignment)
+    document.getElementById('roster').value = assignment.roster.join('\n')
   if (askForDeadline) {
     if ('deadline' in assignment) { // an ISO 8601 string like "2020-12-01T23:59:59Z"
       document.getElementById('deadlineDate').value = assignment.deadline
@@ -51,6 +53,7 @@ window.addEventListener('DOMContentLoaded', () => {
         assignmentID: assignment.assignmentID,
         editKey: assignment.editKey, // undefined when cloned
         problems: document.getElementById('problems').value,
+        roster: document.getElementById('roster').value,
       }
       
     if (askForDeadline) {

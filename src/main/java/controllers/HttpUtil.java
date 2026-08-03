@@ -55,6 +55,17 @@ public class HttpUtil {
                 .build();
     }
 
+    public static NewCookie expireCookie(String name) {
+        return new NewCookie.Builder(name)
+                .value("")
+                .path("/")
+                .maxAge(0)
+                .secure(true)
+                .sameSite(NewCookie.SameSite.NONE)
+                .httpOnly(true)
+                .build();
+    }
+
     // TODO: Fix so that it works for repeated keys
     static Map<String, String[]> paramsMap(MultivaluedMap<String, String> formParams) {
         Map<String, String[]> postParams = new HashMap<>();

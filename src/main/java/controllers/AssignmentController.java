@@ -2,7 +2,6 @@ package controllers;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.horstmann.codecheck.checker.Util;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -48,15 +47,65 @@ public class AssignmentController {
         return edit(assignmentID, null);
     }
 
+    // Instructor-assigned CodeCheck IDs: letters, digits, - and _, up to 64 characters.
+    // (No length limit is imposed anywhere else -- cookies, storage keys, and URL path
+    // segments all comfortably fit IDs far longer than this -- 64 is just a sanity cap.)
+    private static final java.util.regex.Pattern VALID_CCID = java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9_-]{0,63}");
+
     @GET
     @jakarta.ws.rs.Path("/assignment/{assignmentID}")
     @Produces(MediaType.TEXT_HTML)
-    public Response studentStartsWork(@PathParam("assignmentID") String assignmentID) throws IOException, GeneralSecurityException {
+    public Response studentStartsWork(@PathParam("assignmentID") String assignmentID,
+                                       @QueryParam("ccid") String enteredCcid,
+                                       @QueryParam("ccid2") String confirmCcid,
+                                       @QueryParam("confirm") String confirm) throws IOException, GeneralSecurityException {
         try {
             String prefix = HttpUtil.prefix(uriInfo, headers);
-            ccid = Util.createPronouncableUID();
-            editKey = Util.createPrivateUID();
-            String result = assignmentService.work(prefix, assignmentID, ccid, editKey, true /* student */, false /* editKeySaved */);
+
+            if (ccid != null && editKey != null) {
+                // Returning student, same browser: cookie already identifies them.
+                String result = assignmentService.work(prefix, assignmentID, ccid, editKey, true /* student */, true /* editKeySaved */);
+                return Response.ok(result)
+                        .cookie(HttpUtil.buildCookie("ccid", ccid))
+                        .cookie(HttpUtil.buildCookie("cckey", editKey))
+                        .build();
+            }
+
+            if (enteredCcid == null || enteredCcid.isBlank()) {
+                String result = assignmentService.enterID(assignmentID, null);
+                return Response.ok(result).build();
+            }
+
+            // The "continue as X" link from the confirmID page is server-generated
+            // (not hand-typed), so it's exempt from the double-entry check below.
+            if (!"true".equals(confirm)
+                    && (confirmCcid == null || !enteredCcid.trim().equals(confirmCcid.trim()))) {
+                String result = assignmentService.enterID(assignmentID,
+                        "The two IDs you entered don't match. Please try again.");
+                return Response.ok(result).build();
+            }
+
+            String candidate = enteredCcid.trim();
+            if (!VALID_CCID.matcher(candidate).matches()) {
+                String result = assignmentService.enterID(assignmentID,
+                        "That ID contains characters that aren't allowed. Use only letters, digits, - and _.");
+                return Response.ok(result).build();
+            }
+
+            if (!assignmentService.isAllowedID(assignmentID, candidate)) {
+                String result = assignmentService.enterID(assignmentID,
+                        "ID not recognized. Please check with your instructor.");
+                return Response.ok(result).build();
+            }
+
+            if (!"true".equals(confirm) && assignmentService.hasWork(assignmentID, candidate)) {
+                String result = assignmentService.confirmID(prefix, assignmentID, candidate);
+                return Response.ok(result).build();
+            }
+
+            ccid = candidate;
+            editKey = ccid; // the ID itself is the key: the same ID always resumes the same work, from any computer
+            String result = assignmentService.work(prefix, assignmentID, ccid, editKey, true /* student */, true /* editKeySaved */);
             return Response.ok(result)
                     .cookie(HttpUtil.buildCookie("ccid", ccid))
                     .cookie(HttpUtil.buildCookie("cckey", editKey))
@@ -67,23 +116,19 @@ public class AssignmentController {
         }
     }
 
-    // TODO: Hacky. Change route name to /changeAssignmentID?
+    // Clears the ccid/cckey cookies on this computer and returns to the ID entry
+    // form, for shared/lab computers. (Named/shaped for backward compatibility with
+    // the existing clearIDURL link; the {ccid} path segment isn't otherwise needed.)
     @GET
     @jakarta.ws.rs.Path("/assignment/{assignmentID}/{ccid}")
-    @Produces(MediaType.TEXT_HTML)
-    public Response studentChangesID(@PathParam("assignmentID") String assignmentID, @PathParam("ccid") String ccid) throws IOException, GeneralSecurityException {
-        try {
-            String prefix = HttpUtil.prefix(uriInfo, headers);
-            editKey = Util.createPrivateUID();
-            String result = assignmentService.work(prefix, assignmentID, ccid, editKey, true /* student */, false /* editKeySaved */);
-            return Response.ok(result)
-                    .cookie(HttpUtil.buildCookie("ccid", ccid))
-                    .cookie(HttpUtil.buildCookie("cckey", editKey))
-                    .build();
-        }
-        catch (ServiceException ex) {
-            return Response.status(Response.Status.BAD_REQUEST).entity(ex.getMessage()).build();
-        }
+    public Response studentClearsID(@PathParam("assignmentID") String assignmentID, @PathParam("ccid") String ignoredCcid) {
+        // Root-relative: HttpUtil.prefix() builds paths meant for links embedded in
+        // an HTML page (resolved by the browser against that page's own URL), which
+        // is the wrong tool for a Location header -- it must resolve against the
+        // current origin regardless of proxies/schemes, so a plain "/..." path is safest.
+        return Response.seeOther(java.net.URI.create("/assignment/" + assignmentID))
+                .cookie(HttpUtil.expireCookie("ccid"), HttpUtil.expireCookie("cckey"))
+                .build();
     }
 
     @GET
