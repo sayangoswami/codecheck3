@@ -1,0 +1,15 @@
+{
+  "name": "comrun-java",
+  "version": "1.0.0",
+  "description": "Java-only comrun replacement: compiles/runs/unit-tests submitted Java code for codecheck-webapp, without OS-user sandboxing",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.0",
+    "formidable": "^3.5.2",
+    "ws": "^8.18.0"
+  }
+}
