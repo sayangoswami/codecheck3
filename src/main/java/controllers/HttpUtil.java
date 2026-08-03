@@ -39,7 +39,16 @@ public class HttpUtil {
             }
             prefix = prefix.substring(0, prefix.length() - 1);
         } else {
-            prefix = (secure ? "https://" : "http://") + host;
+            // Only add an explicit port when connected to directly (no reverse proxy in
+            // front): behind a proxy (Railway, etc.) the internal port isn't the public
+            // one, and X-Forwarded-Proto being present is evidence of exactly that.
+            boolean behindProxy = !headers.getRequestHeader("X-Forwarded-Proto").isEmpty();
+            int port = uri.getPort();
+            String portSuffix = "";
+            if (!behindProxy && port != -1 && !((secure && port == 443) || (!secure && port == 80))) {
+                portSuffix = ":" + port;
+            }
+            prefix = (secure ? "https://" : "http://") + host + portSuffix;
         }
         return prefix;
     }
