@@ -44,11 +44,18 @@ def raise_for_status_verbose(resp: requests.Response):
 
 
 def find_title(markdown_text: str, fallback: str) -> str:
+    # Use the highest-level heading in the document (fewest #'s), not just the
+    # first one encountered -- a doc might open with a "##" subsection before
+    # its actual "#" title, or use "##"/"###" as its top level throughout.
+    headings = []  # (level, text), in document order
     for line in markdown_text.splitlines():
-        m = re.match(r"\s*#+\s+(.*\S)\s*$", line)
+        m = re.match(r"\s*(#+)\s+(.*\S)\s*$", line)
         if m:
-            return m.group(1)
-    return fallback
+            headings.append((len(m.group(1)), m.group(2)))
+    if not headings:
+        return fallback
+    min_level = min(level for level, _ in headings)
+    return next(text for level, text in headings if level == min_level)
 
 
 def build_problem_zip(problem_dir: Path) -> tuple[bytes, str]:
