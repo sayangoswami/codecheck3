@@ -18,7 +18,7 @@ RUN mkdir -p lib/jars \
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY server.js .
-COPY lib/runner.js lib/runner.js
+COPY lib/*.js lib/
 
 EXPOSE 8080
 CMD ["node", "server.js"]
