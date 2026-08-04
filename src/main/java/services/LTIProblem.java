@@ -170,7 +170,7 @@ public class LTIProblem {
             + "<html lang=\"en\">\n"
             + "<head>\n"
             + "  <meta charset=\"utf-8\">\n"
-            + "  <link href='https://horstmann.com/codecheck/css/codecheck_tracer.css' rel='stylesheet' type='text/css'/>  "
+            + "  <link href='/assets/tracer/css/codecheck_tracer.css' rel='stylesheet' type='text/css'/>  "
             + "  <title>CodeCheck Tracer</title>\n"
             + "  <script src='/assets/util.js'></script>\n"
             + "  <script src='/assets/codecheck2.js'></script>\n"
@@ -194,8 +194,11 @@ public class LTIProblem {
         result.append(tracerStart);
         result.append("    <h1 style=\"position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;\">CodeCheck Tracer Problem</h1>\n");
         result.append("    <p>Submission ID: " + ltiNode.get("submissionID").asText() + "</p>");
-        if (data.description != null)
+        if (data.description != null) {
+            result.append("    <div class='hc-included'>\n");
             result.append(data.description);
+            result.append("    </div>\n");
+        }
         result.append(tracerScriptStart);
         result.append("horstmann_config.lti = " + ltiNode.toString() + "\n");
         result.append(Util.getString(problemFiles, Path.of("tracer.js")));

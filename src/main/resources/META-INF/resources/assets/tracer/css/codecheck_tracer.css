@@ -1,0 +1,429 @@
+@import url("horstmann_common.css");
+
+:root {
+  --yellowish-selected: #ffe06a;
+  --yellowish-variable: #FFEFA9;
+  --greenish-sequence: #80d4ce;
+  --purplish-heap: #DF8489;
+  --orangish-embedded: #FBBC86;
+  --grayish-linenumber: #444;  
+}
+
+html, body { /* TODO Edgcomb 2022-08-01 */
+  height: auto;
+}
+
+.hc-element {
+  height: auto;
+}
+
+.codecheck_tracer .hc-code, .codecheck_tracer pre, .codecheck_tracer code,
+.codecheck_tracer .index, .codecheck_tracer .title, .codecheck_tracer .name,
+.codecheck_tracer .terminal, .codecheck_tracer .codelines {
+    font-family:"Mono", "Courier New", monospace;
+    /* Was 86.46297%, an x-height-matching ratio calculated for the old
+       STIXTwoText/DejaVuSansMono pairing; too small with the current fonts.
+       (.title is further overridden to 110%/120% below.) */
+    font-size: 100%;
+    word-wrap: break-word;
+}
+
+.codecheck_tracer .vertex .title, .codecheck_tracer .vertex .name {
+  font-family: "STIXTwoText", serif;
+  font-style: italic;
+}
+
+.codecheck_tracer .codelines.pseudo, .codecheck_tracer .name.pseudo, {
+    font-family:"Kalam", "Comic Sans MS", cursive;
+    font-size: 92.1875%; /* (472/1000) / (512/1000) */
+    letter-spacing: -0.05em;
+}
+
+.codecheck_tracer .arenaContainer {
+    /* width: 100%; TODO Edgcomb 2022-08-01 */
+    margin-top: 2em; /* 2022-12-19 */
+    cursor: pointer;
+    user-select: none;
+    -moz-user-select: none;      /* Firefox */
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none;   /* Safari */
+    -ms-user-select: none;       /* Internet Explorer/Edge */    
+}
+
+.codecheck_tracer .arenaContainer table {
+    font-size: inherit; /* Otherwise a browser style sheet rule sets this, which interferes with zooming */
+}
+
+.codecheck_tracer .arenaContainer > :first-child {
+    width: 100%;
+}
+
+.codecheck_tracer .codelines {
+   display: inline-block;
+   vertical-align: top;
+   counter-reset: line;
+}
+
+.codecheck_tracer .codelines > span {
+    /* margin-left: 2em; 2022-12-19 */
+    display: block;
+    white-space: pre;
+    counter-increment: line;
+    /* Without this, the box (which shrink-wraps to the widest line, via
+       .codelines being inline-block) has no buffer on the right, so the
+       longest line's text -- and any selected line's full-width highlight
+       background -- sits flush against the edge, while the line-number
+       gutter on the left (min-width 3em + padding-right 2em, mostly blank
+       for 1-2 digit numbers) reads as empty space by comparison. */
+    padding-right: 2em;
+}
+
+.codecheck_tracer .codelines > span:before {
+  content: counter(line);
+  display: inline-block;
+  padding-right: 2em;
+  color: var(--grayish-linenumber);
+  text-align: right;
+  min-width: 3em;
+  font-size: 0.7em;
+}
+
+
+.codecheck_tracer .codelines > span:focus, .codecheck_tracer th:focus, .codecheck_tracer span:focus, .codecheck_tracer table:focus, .horstmann_rearrange .tile:focus, .multiple-choice > li:focus {
+    /* border: solid 0.2em #c0c0c0; */
+}
+
+.codecheck_tracer .codelines .hc-selected {
+    background: var(--yellowish-selected);
+}
+
+.codecheck_tracer .codelines .hc-selected.hc-good {
+  background-color: var(--greenish-success);
+}
+
+.codecheck_tracer .codelines .hc-bad {
+  background-color: var(--reddish-error);
+}
+
+/* To work around a bug in Safari. Unfortunately, the workaround doesn't work either */
+.codecheck_tracer .selected-line:focus::before, .codecheck_tracer .code-table > pre > .hc-good:focus::before, .codecheck_tracer .code-table > pre > .hc-bad:focus::before {
+    outline: none; 
+}
+
+/* Objects, arrays, frames */
+
+.codecheck_tracer .frame,
+.codecheck_tracer .object,
+.codecheck_tracer .array,
+.codecheck_tracer .vertex {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  hyphens: none;
+  -webkit-hyphens: none;
+  margin-right: 0.75em;
+}
+
+/* Names and values */
+
+.codecheck_tracer .name {
+  padding-top: 0.1em;
+  padding-bottom: 0.1em;
+  margin-top: 0.1em;
+  margin-bottom: 0.1em;
+  padding-left: 0.75em;
+  justify-self: end;
+  display: flex; 
+  align-items: center;
+  min-height: 1.5em;
+}
+
+.codecheck_tracer .array > .name {
+  font-size: 85%;
+}
+
+.codecheck_tracer .frame > .name:after,
+.codecheck_tracer .object > .name:after {
+  padding-left: 0.25em;
+  content: "=";
+}
+
+.codecheck_tracer .value {
+  padding-top: 0.1em;
+  padding-bottom: 0.1em;
+  padding-left: .75em;
+  margin-top: 0.1em;
+  margin-bottom: 0.1em;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+}
+
+.codecheck_tracer .value > span {
+  display: inline-block;
+  background: white;
+  padding: 0.1em;
+  min-width: 4em;
+  text-align: center;
+  margin-right: 0.75em;
+  border: solid thin gray;
+  white-space: nowrap;
+}
+
+.codecheck_tracer .vertex .value > span {
+  min-width: 2.5em;
+}
+
+
+.codecheck_tracer .fat {
+  align-self: start;
+}
+
+.codecheck_tracer .title {
+  border-bottom: thin solid white;
+  grid-column: span 2;
+  text-decoration: underline;
+  font-size: 110%;
+  text-align: center;
+  margin: 0em;
+  padding: 0.4em;
+  white-space: nowrap;
+}
+
+.codecheck_tracer .vertex > .title {
+  text-decoration: none;
+  font-size: 120%;
+}
+
+
+.codecheck_tracer .history {
+  text-decoration: line-through;
+  color: var(--grayish-history);
+  margin-right: 0.5em;
+}
+
+/* Seq */
+
+.codecheck_tracer .seq {
+  margin: 0.1em;
+}
+
+.codecheck_tracer .seq > tr > td, .codecheck_tracer tr.seq > td {
+    text-align: center;
+    margin: 0.1em;
+    min-width: 1.5em;
+    padding-top: 0.25em;
+    padding-bottom: 0.25em;
+    border-style: none;
+}
+
+.codecheck_tracer tr.index > td {
+  text-align: center;
+}
+
+.codecheck_tracer tr > td.index {
+  text-align: right;
+}
+
+.codecheck_tracer tr.index > td:empty {
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Graph */
+
+.codecheck_tracer .edgevalue {
+  justify-self: start;
+  align-items: center;
+  display: inline-block;
+  background: white;
+  padding: 0.3em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Tree */
+
+.codecheck_tracer .treenode {
+  display: grid;
+  grid-auto-flow: row;
+  grid-template-columns: repeat(2, 1fr); /* TODO: Need to adapt when more than two children */
+}
+
+.codecheck_tracer .treenode > div {
+  display: inline-block;
+  border: solid thin white;
+  min-height: 1em;
+  grid-row: 2;
+  text-align: center;
+}
+
+.codecheck_tracer .treenode > div:first-child {
+  grid-row: 1;
+  grid-column: 1/-1;
+  border: solid thin white;
+  min-width: 3em;
+  min-height: 1.5em;
+}
+
+.codecheck_tracer .treenode > div:first-child > span {
+  display: inline-block;
+  padding: 0.2em;
+}
+
+/* Colors */
+
+.codecheck_tracer .object.heap,
+.codecheck_tracer .array.heap {
+  background: var(--purplish-heap);
+}
+
+.codecheck_tracer .object.struct,
+.codecheck_tracer .array.struct {
+  background: var(--orangish-embedded);
+  border: medium solid white;
+}
+
+.codecheck_tracer .frame > .name,
+.codecheck_tracer .frame > .value {
+  background: var(--yellowish-variable);
+}
+
+.codecheck_tracer .seq > tr > td, .codecheck_tracer tr.seq > td {
+    background-color: var(--greenish-sequence); 
+}
+
+.codecheck_tracer * > tr.index > td, .codecheck_tracer tr > td.index {
+  background-color: white;
+}
+
+/* Round corners */
+
+.codecheck_tracer .object,
+.codecheck_tracer .array,
+.codecheck_tracer .node {
+  border-top-left-radius: 0.75em;
+  border-bottom-left-radius: 0.75em;                  
+  border-top-right-radius: 0.75em;
+  border-bottom-right-radius: 0.75em;
+}
+
+.codecheck_tracer .frame > .name {
+  border-top-left-radius: 0.75em;
+  border-bottom-left-radius: 0.75em;         
+}
+
+.codecheck_tracer .frame > .value {
+  border-top-right-radius: 0.75em;
+  border-bottom-right-radius: 0.75em;
+}
+
+.codecheck_tracer .fat {
+  border-bottom-left-radius: 0.75em;
+}
+
+/* Focus, just for testing
+
+.codecheck_tracer span.pointerStart {
+    background-color: blue;
+}
+
+.codecheck_tracer :focus {
+  border: medium dotted blue;
+}
+
+.codecheck_tracer .hc-button.hc-step:focus {
+  border: medium dotted yellow;
+}
+
+*/
+
+/* Good/bad */
+
+.codecheck_tracer .object.hc-bad::after {
+  content: url("../images/cross.png");
+  position: absolute;
+  padding: 0.5em;
+}
+
+.codecheck_tracer .object.hc-good::after {
+  content: url("../images/tick.png");
+  position: absolute;
+  padding: 0.5em;
+}
+
+/* Buttons */
+
+.codecheck_tracer .buttons {
+  width: max-content;
+  padding: 1em;
+  background: var(--grayish-background);
+}
+
+/* Terminal */
+
+.terminal {
+  min-width: 20em;
+  min-height: 10em;
+  padding: 1em;
+  border: thin solid black;
+  border-radius: 1em;
+}
+
+.terminal .input {
+  font-weight: bold;
+}
+
+/* Good/bad */
+
+.hc-button.hc-step.hc-bad {
+  background-color: var(--reddish-error);
+  /* --reddish-error is a very light pink; .hc-button's default white text
+     is nearly invisible on it (~1.4:1), so use a dark red instead. */
+  color: var(--reddish-error-strong);
+}
+
+.hc-button.hc-step.hc-good {
+  /* background-color: #A3F187; */
+  background-color: var(--greenish-success);
+  /* --greenish-success is light enough that white text (the .hc-button
+     default) only reaches ~2.6:1 contrast, and even --greenish-success-strong
+     (tuned for contrast against white, not against this bg) only reaches
+     ~1.9:1 here. This near-black green reaches ~5.6:1 against the bg. */
+  color: #0F2E11;
+}
+
+.codecheck_tracer .value > span.hc-bad {
+  /* background-color: #B4939D; */
+  background-color: var(--reddish-error);
+}
+
+.codecheck_tracer .value > span.hc-good {
+  background-color: var(--greenish-success);
+}
+
+.codecheck_tracer .selectable-node.hc-good {
+  border: medium dotted;
+  /* Darker variant: as a border/outline this needs 3:1 against its
+     surroundings (WCAG 1.4.11); --greenish-success alone only reaches ~2.6:1. */
+  border-color: var(--greenish-success-strong);
+}
+
+.codecheck_tracer .selectable-node.hc-bad {
+  border: medium dotted;
+  /* --reddish-error is a very light pink (~1.4:1 against white) — too low
+     for a border/outline, which needs 3:1 (WCAG 1.4.11). Reuse the dark red
+     from .hc-button.hc-step.hc-bad (~9.3:1). */
+  border-color: var(--reddish-error-strong);
+}
+
+.codecheck_tracer .selectable-edge.hc-good {
+  stroke-dasharray: 0.2,0.2;
+  /* TODO: Figure out how to change color */
+}
+
+.codecheck_tracer .selectable-edge.hc-bad {
+  stroke-dasharray: 0.2,0.2;
+  stroke-opacity: 30%;
+  /* TODO: Figure out how to change color */
+}

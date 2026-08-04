@@ -1,0 +1,466 @@
+@charset "utf-8";
+
+/* 
+
+Styling rules
+
+An interactive element is always inside an element with class 
+hc-included. The element itself has class hc-element and one of 
+the classes horstmann_algosim, horstmann_codecheck, horstmann_ma, 
+multiple-choice [sic], horstmann_objectdiagram, and so on. 
+
+Code and handwriting fonts in the elements are achieved with 
+the .hc-code and .hc-hand mixins. These are marked !important 
+so that they override any others. Description authors should not
+use these but stick with code, pre, and .pseudo.
+
+Let's keep the common rules simple and easy to override. (In CSS,
+a longer sequence of class, pseudo-class and attribute selectors
+wins over a shorter sequence; see https://developer.mozilla.org/en-US/docs/Web/CSS/Specificity) 
+
+*/
+
+/* Colors */
+
+:root {
+  --greenish-start: #005a70;
+  --bluish-action: #0054a8;
+  /* Darkened from the original #E19042 so text/icons in this color reach at
+     least a 4.5:1 contrast ratio against white (WCAG AA). The original was
+     only ~2.5:1. */
+  --orangish-warning: #A85A18;
+  /* Kept light: used as a background with dark/default text elsewhere
+     (contrast is fine there). Where this color is needed as TEXT, a border,
+     or a background behind WHITE text, use the *-strong variant instead. */
+  --reddish-error: #F4D3DD;
+  --reddish-error-strong: #8B1A1A;
+  --greenish-success: #63B147;
+  --greenish-success-strong: #2E7D32;
+  --grayish-background: #F3F3F4;
+  --grayish-focusborder: #c0c0c0;
+  --grayish-disabled: #707070;
+  /* Darkened from "lightgray" (#D3D3D3, ~1.5:1) so struck-through history
+     values stay readable (~7:1) instead of relying on strikethrough alone. */
+  --grayish-history: #595959;
+}
+
+/* Fonts */
+
+/*
+  x-height from FontForge
+  STIXTwoText: 472/1000
+  Kalam: 512/1000
+  Deja Vu Sans/Deja Vu Sans Mono: 1118/2048
+  Atkinson Hyperlegible Next: metrics close enough to DejaVuSans to reuse
+  its sizing without adjustment.
+*/
+
+/* Self-hosted (not a Google Fonts runtime request) so it keeps working
+   offline and behind restrictive school networks. SIL Open Font License.
+   Reuses the same font files as the main webapp's codecheck.css
+   (../../fonts/, i.e. assets/fonts/) instead of shipping a second copy;
+   these @font-face rules are still declared here too since this stylesheet
+   is sometimes loaded standalone (see services.Files/LTIProblem tracer
+   pages), without codecheck.css alongside it. Duplicate @font-face
+   declarations for the same family+src are harmless when both are loaded. */
+@font-face {
+    font-family: "Atkinson Hyperlegible Next";
+    src: url("../../fonts/AtkinsonHyperlegibleNext-Regular-latin.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Atkinson Hyperlegible Next";
+    src: url("../../fonts/AtkinsonHyperlegibleNext-Regular-latin-ext.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Same monospace font as the main site's coding area (codecheck.css's
+   `code, pre { font-family: Mono; }`), not self-hosted there either, so
+   this matches rather than introduces a new external dependency. Was
+   previously "DejaVuSansMonoSemiCondensed", which has no @font-face
+   anywhere in this app and so was always silently falling back to
+   "Courier New"/monospace. */
+@font-face {
+    font-family: "Mono";
+    src: url("https://horstmann.com/fonts/NotoSansMono-VariableFont_wdth,wght.ttf");
+    font-stretch: 60%;
+}
+
+.hc-included, .hc-comment {
+    font-family: "Atkinson Hyperlegible Next", "Arial", sans-serif;
+    font-size: 110%;
+}
+
+.hc-included .hc-code, .hc-included pre, .hc-included code {
+    font-family:"Mono", "Courier New", monospace;
+    /* Was 86.46297%, an x-height-matching ratio calculated for the old
+       STIXTwoText/DejaVuSansMono pairing; too small with the current fonts. */
+    font-size: 100%;
+    word-wrap: break-word;
+}
+
+.hc-included .hc-hand, .hc-included .pseudo {
+    font-family:"Kalam", "Comic Sans MS", cursive;
+    font-size: 92.1875%; /* (472/1000) / (512/1000) */
+    letter-spacing: -0.05em;
+}
+
+/*
+.hc-included li .hc-hand, .hc-included p .hc-hand,.hc-included li .pseudo {
+    font-family:"Kalam", "Comic Sans MS", cursive;
+    font-size: 105%;
+    letter-spacing: -0.05em;
+}
+*/
+
+.hc-included pre .hc-comment, .hc-included code .hc-comment, .hc-included .hc-code .hc-comment {
+    font-size: 115.65645%; /* (1118/2048) / (472/1000) */
+}
+
+.hc-included pre.hc-hand, .hc-included pre .hc-hand, .hc-included pre.pseudo, .hc-included pre .pseudo {
+    font-size: 106.62079%; /* (1118/2048) / (512/1000) */
+}
+
+.hc-included th {
+    font-family:"Atkinson Hyperlegible Next", "Arial", sans-serif;
+    font-weight: bold;
+}
+
+.hc-included th.code, .hc-included th code, .hc-button code, .hc-message code  {
+    font-size: 100%; /* To match DejaVuSans instead of STIX */
+}
+
+.hc-included th.hc-hand, .hc-included th .hc-hand, .hc-included th .pseudo {
+    font-size: 106.62079%; /* (1118 / 2048) / (512 / 1000), to match DejaVuSans instead of STIX */
+}
+
+.hc-included th, .hc-included td { /* for tables in the description */
+    background: var(--grayish-background);
+    padding: 0.2em 0.4em 0.2em 0.4em;
+}
+
+.hc-circled {
+    font-family:"DejaVuSansMonoSemiCondensed", "Courier New", monospace;
+    font-weight: bold;
+    background: var(--bluish-action);
+    border-radius: 1em;
+    width: 1.2em;
+    color: white;
+    display: inline-block;
+    text-align: center;
+    vertical-align: middle;
+    padding: 0.3em;
+    margin: 0 0.1em 0 0.1em;
+}
+
+.hc-circled.hc-selected {
+    background: white;
+    border-color: var(--bluish-action);
+    color: var(--bluish-action);
+    border: solid .2em;
+}
+
+.hc-message, .hc-button {
+    font-family:"Atkinson Hyperlegible Next", "Arial", sans-serif;
+}
+
+/* Colors and backgrounds */
+
+.hc-included pre strong, .hc-included pre b, .hc-message, .hc-message.hc-step {
+    color: var(--bluish-action);
+}
+
+.hc-button.hc-step {
+    background: var(--bluish-action);
+}
+
+.hc-message.hc-retry {
+    color: var(--orangish-warning);
+    margin-bottom: .5em;
+}
+
+.hc-button.hc-retry {
+    background: var(--orangish-warning);
+}
+
+.hc-button.hc-start, .hc-step.hc-reset {
+    background: var(--greenish-start);
+}
+
+.hc-message.hc-good {
+    color: var(--greenish-success-strong);
+}
+
+.hc-instructions {
+  background: var(--grayish-background);
+}
+
+/*------------------------------------------------------------------*/
+
+.hc-message .hc-circled-number {
+    font-size: 1.75em;
+    vertical-align: middle;
+}
+
+/* This is for styling the p, pre, code, etc. in an included item */
+
+.hc-included p {
+    line-height:1.143; 
+    margin-bottom:1em;
+    margin-left:0;
+    margin-right:1em;
+    margin-top:1em;
+    text-align:left;
+    text-indent:0;
+}
+
+.hc-included li {
+    line-height: 1.143;
+    margin-bottom: 0.2em;
+    margin-top: 0.2em;
+}
+
+.hc-included pre {
+    line-height: 1.25;
+}
+
+.hc-included code {
+    white-space: pre-wrap;
+}
+
+/*------------------------------------------------------------------*/
+
+/* All styling that is common to multiple elements goes here */
+
+/*------------------------------------------------------------------*/
+
+/* Shape for all buttons */
+
+.hc-button {
+    font-weight: bold;
+    color: #FFFFFF;
+    cursor: pointer;
+    padding: 0.2em .56em;
+    border-radius: 0.56em;
+    position: relative;
+    font-size: 90%;
+    margin-left: 0.2em;
+    margin-right: 0.2em;
+    user-select: none;
+}
+
+.hc-button.hc-start {
+    margin-left:1.25em;
+}
+
+.hc-step.hc-reset {
+    margin-left:6em;
+}
+
+.hc-goodjob::after {
+    content: "✓";
+    color: var(--greenish-success-strong);
+    font-size: 3em;
+    font-weight: bold
+}
+
+/* Button states */
+
+.hc-button:focus {
+    border: solid 0.2em var(--grayish-focusborder);
+    border-radius: 0.56em;
+}
+
+.hc-button.hc-disabled {
+  background: var(--grayish-disabled);
+  pointer-events: none; 
+}
+
+/* Font for all messages */
+
+.hc-message {
+    font-weight: bold;
+    font-size: 100%;
+    margin-top: 1em;
+}
+
+.hc-message2 {
+    font-size: 0.8em;
+}
+
+/* Bottom panel */
+
+.hc-bottom {
+    text-align: center;
+    clear: both;
+    user-select: none;
+}
+
+.hc-bottom .hc-message {
+    text-align: left;
+    margin-bottom: 1.5em;
+}
+
+/* Instruction pane */
+
+.hc-instructions {
+    line-height: 1.1em;
+    margin: 1em 1em 1em 0;
+    padding: 0.5em 1em;
+    min-height: 5em; /* to prevent resizing */
+    /* Same idea, horizontally: width: max-content means this box would
+       otherwise shrink/grow to fit whatever instruction text is currently
+       shown, visibly jumping on every step. A generous fixed floor keeps it
+       stable for typical instruction lengths; width: max-content still lets
+       it grow beyond this for any exceptionally long message. */
+    min-width: 30em;
+    user-select: none;
+    width: max-content;
+}
+
+.hc-bottom .hc-debug {
+    text-align: right;
+    font-size: 0.5em;
+}
+
+/* Input field */
+
+.hc-element > div:nth-child(2) {
+    position: relative;
+}
+
+.hc-element > div:nth-child(2) > input {
+    z-index: 100;
+    text-align: center;
+    border: solid black thin;
+    position: absolute;
+}
+
+.hc-element > div:nth-child(2) > input.hc-bad {
+    background-color: var(--reddish-error);
+}
+
+/*------------------------------------------------------------------*/
+
+/* Zoom button for enlarging images */
+
+.hc-zoombutton {
+    margin-left: 0.2em;
+}
+
+/*------------------------------------------------------------------*/
+
+
+body {
+    /* overflow-y: hidden; */ /* TODO: This takes care of a double scroll bar in qref, but why doesn't it have other adverse effects? */
+    /* Removed */
+}
+
+/* Cross references, glossary in VitalSource */
+
+.hc-qref {
+    z-index: 100;
+    width: 40%;
+    height: 80%;
+    overflow: hidden;
+    position: fixed; /* so that it stays when scrolled, https://stackoverflow.com/questions/19064987/html-css-popup-div-on-text-click */
+    box-shadow: .5em .5em .5em #ddd;    
+    background-color: #F3F0DD;
+    display: flex;
+    flex-direction: column;
+    padding: 0.3em;
+    left: 55vw;
+    top: 10vh;
+}
+
+.hc-qref > div:nth-child(1) {
+    position: relative;
+    padding: 0.3em;
+    width: 100%;
+}
+
+.hc-qref > div:nth-child(2) {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+}
+
+.hc-qref > div > iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    overflow: hidden;
+}
+
+.hc-glossary {
+    color: black;
+    z-index: 100;
+    background-size: auto 85%;
+    box-shadow: .5em .5em .5em #ddd;
+    padding: 0.3em; 
+    height: auto; 
+    width: 20em;
+    overflow: hidden;
+    background-color: #F3F0DD;
+    display: inline;
+    position: absolute;
+    font-family:"Atkinson Hyperlegible Next", "Arial", sans-serif;
+    font-size: .75em;
+}
+
+.hc-glossary code {
+    font-family:"DejaVuSansMonoSemiCondensed", "Courier New", monospace;
+    font-size: 100%;
+}
+
+.hc-glossary > div {
+    text-align: left;
+    padding: 0.8em;
+    display: inline-block;
+}
+
+.hc-glossary > div > p:first-child {
+    font-weight: bold;
+    margin-bottom: 1em;
+}
+
+/* iPad scrolling-to-top madness
+
+https://discussions.apple.com/thread/7208426
+https://github.com/fancyapps/fancyBox/issues/2#issuecomment-5997068
+https://stackoverflow.com/questions/34766636/ios-browser-iframe-jumps-to-top-when-changing-css-or-content-using-javascript
+
+https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariCSSRef/Articles/StandardCSSProperties.html
+
+
+
+*/
+
+/* Some of this pixie dust is necessary to prevent Safari from
+jumping. This is still a problem when clicking on a link 
+referencing another section that makes a popup. 2019-12-16 */
+
+html, body {
+    height: 100%;
+    padding-bottom: 1px;
+}
+
+body > div {
+    width: 100%;
+    height: 100%;
+    padding-bottom: 1px;
+    position: relative;
+    /* overflow: auto; */ /* This was to make the iPad not jump but it interfered with accessibility */
+}
+
+.interactivities {
+    -webkit-overflow-scrolling: touch;
+    -webkit-touch-callout: none; 
+    overflow-x: scroll; /* Enable horizontal swiping on iOS 2019-12-16 */
+}

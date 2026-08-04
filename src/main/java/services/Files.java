@@ -85,7 +85,7 @@ public class Files {
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <link href='https://horstmann.com/codecheck/css/codecheck_tracer.css' rel='stylesheet' type='text/css'/>  \
+  <link href='/assets/tracer/css/codecheck_tracer.css' rel='stylesheet' type='text/css'/>  \
   <title>CodeCheck Tracer</title>
   <script src='/assets/util.js'></script>
   <script src='/assets/codecheck2.js'></script>
@@ -115,8 +115,11 @@ public class Files {
         StringBuilder result = new StringBuilder();
         result.append(tracerStart);
         result.append("<h1 style=\"position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;\">CodeCheck Tracer Problem</h1>\n");
-        if (data.description != null)
+        if (data.description != null) {
+            result.append("<div class='hc-included'>\n");
             result.append(data.description);
+            result.append("</div>\n");
+        }
         result.append(tracerScriptStart);
         result.append(Util.getString(problemFiles, Path.of("tracer.js")));
         result.append(tracerEnd);
