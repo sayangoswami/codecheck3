@@ -316,6 +316,7 @@ public Response contentSelection(MultivaluedMap<String, String> formParams)
 
     private String contentSelectionForm = """
                 <html>
+                    <head><link rel="stylesheet" href="/assets/codecheck.css"/></head>
                     <body>
                         <form method="post" action="%s">
                             <label for="assignment_url">Enter a CodeCheck assignment URL:</label><br>
@@ -324,6 +325,7 @@ public Response contentSelection(MultivaluedMap<String, String> formParams)
 
     private String contentSelectionReturnForm = """
             <html>
+                <head><link rel="stylesheet" href="/assets/codecheck.css"/></head>
                 <body onload="document.forms[0].submit()">
                     <p>Returning selected content to Moodle…</p>
                     <form method="post" action="%s">

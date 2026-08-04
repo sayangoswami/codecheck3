@@ -33,13 +33,13 @@
     margin-bottom: 0.5em;
     margin-left: 1.18em;
     font-weight: bold;
-    font-family: "Mono", sans-serif;
+    font-family: "Atkinson Hyperlegible Next", sans-serif;
 }
 
 .codecheck-submit-response .header {
     color:#0054a8;
     font-weight: bold;
-    font-family: "Mono", sans-serif;
+    font-family: "Atkinson Hyperlegible Next", sans-serif;
     margin-left: 0em;
 }
 
@@ -47,12 +47,15 @@
     font-weight: bold;
 }
 
+/* Plain green/red/gray fall short of WCAG AA's 4.5:1 contrast on white/#EEE
+   (measured ~4-4.4:1); these pass comfortably (~6-7:1). Same values as
+   HTMLReport.java's inline <style>, which this stylesheet mirrors. */
 .codecheck-submit-response .pass {
-    color: green;
+    color: #006400;
 }
 
 .codecheck-submit-response  .fail {
-    color: red;
+    color: #B00020;
 }
 
 .codecheck-submit-response .note {
@@ -65,7 +68,7 @@
 }
 
 .codecheck-submit-response .linenumber {
-    color: gray;
+    color: #595959;
 }
 
 .codecheck-submit-response td, .codecheck-submit-response th {
@@ -83,7 +86,7 @@
 }
 
 .codecheck-submit-response, .codecheck-submit-response p {
-    font-family: "Mono", sans-serif;
+    font-family: "Atkinson Hyperlegible Next", sans-serif;
     margin-left: 1em;
     margin-bottom: 1em;
 }

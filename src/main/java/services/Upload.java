@@ -108,8 +108,9 @@ public class Upload {
             report = codeCheck.checkAndSave(problem, problemFiles);
         }
         response.append(
-                "<html><head><title></title><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
-        response.append("<body style=\"font-family: sans-serif\">");
+                "<html><head><title></title><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>"
+                + "<link rel=\"stylesheet\" href=\"/assets/codecheck.css\"/>");
+        response.append("<body>");
         
         String problemUrl = createProblemURL(requestPrefix, problem, problemFiles);
         response.append("Public URL (for your students): ");
@@ -199,11 +200,12 @@ public class Upload {
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <link rel="stylesheet" href="/assets/codecheck.css"/>
     <title>Edit Problem</title>
     <script src="/assets/editProblem.js" type="text/javascript"></script>
     <script src="/assets/util.js" type="text/javascript"></script>
 </head>
-<body style="font-family: sans-serif;">
+<body>
 Public URL (for your students): 
 <a href="%s" target="_blank">%s</a>
 <form method="post" action="/editedFiles/%s/%s">
