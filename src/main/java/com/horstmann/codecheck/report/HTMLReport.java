@@ -37,11 +37,13 @@ public class HTMLReport implements Report {
         builder.append("<style type=\"text/css\">\n");
         builder.append(".header {font-weight: bold; font-size: 1.2em; }\n");
         builder.append(".item {font-weight: bold;}\n");
-        builder.append(".pass {color: green;}\n");
-        builder.append(".fail {color: red;}\n");
+        // Plain "green"/"red"/"gray" fall short of WCAG AA's 4.5:1 contrast
+        // (measured ~4-4.4:1 against white/#EEE); these pass comfortably (~6-7:1).
+        builder.append(".pass {color: #006400;}\n");
+        builder.append(".fail {color: #B00020;}\n");
         builder.append(".note {color: blue; font-weight: bold;}\n");
         builder.append("table.file td {padding-right: 1em; background: #FFF; }\n");
-        builder.append(".linenumber {color: gray;}\n");
+        builder.append(".linenumber {color: #595959;}\n");
         builder.append(".footnote {font-size: 0.7em;}\n");
         builder.append("table {font-size: 0.9em;}\n");
         builder.append("td, th { background: #EEE; margin: 0.5em; padding: 0.25em;}\n");
@@ -61,11 +63,13 @@ public class HTMLReport implements Report {
     @Override
     public HTMLReport header(String section, String text) {
         if (text != null && !text.trim().equals("")) {
-            builder.append("<p class=\"header");        
+            // <h2>, not <p>: gives screen-reader users a real heading landmark to
+            // navigate the report by section (nests under the embedding page's <h1>).
+            builder.append("<h2 class=\"header");
             if (section != null) { builder.append(" "); builder.append(section); }
             builder.append("\">");
             escape(text);
-            builder.append("</p>\n");
+            builder.append("</h2>\n");
         }
         hidden = false;
         return this;
@@ -369,7 +373,7 @@ public class HTMLReport implements Report {
     }
 
     private HTMLReport headerCell(CharSequence text) {
-        builder.append("<th>");
+        builder.append("<th scope=\"col\">");
         if (text.length() == 0)
             builder.append("&#160;");
         else

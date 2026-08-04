@@ -249,14 +249,14 @@ public class JSONReport implements Report {
         StringBuilder builder = new StringBuilder();
         if (run.html != null) builder.append(run.html);
         builder.append("<table border='1' style='border-collapse: collapse;'>");
-        builder.append("<tr><th>Actual output</th><th>Expected output</th></tr>");
+        builder.append("<tr><th scope='col'>Actual output</th><th scope='col'>Expected output</th></tr>");
         builder.append("<tr><td><pre>");
         for (Match m : matchData) {
             StringBuilder row = HTMLReport.htmlEscape(m.actual);
             if (m.matches)
                 builder.append(row);
             else {
-                builder.append("<em style='color: red;'>"); 
+                builder.append("<em style='color: #B00020;'>"); 
                 builder.append(row);
                 builder.append("</em>");
             }        
@@ -292,12 +292,12 @@ public class JSONReport implements Report {
             for (int i = 0; i < lines.size(); i++) {
                 StringBuilder line = HTMLReport.htmlEscape(lines.get(i));
                 if (matches.contains(i)) {
-                    builder.append("<span style='color: green;'>");
+                    builder.append("<span style='color: #006400;'>");
                     builder.append(line);
                     builder.append("</span>");
                 }
                 else if (mismatches.contains(i)) {
-                    builder.append("<span style='color: red;'>");
+                    builder.append("<span style='color: #B00020;'>");
                     builder.append(line);
                     builder.append("</span>");                
                 }
@@ -339,17 +339,17 @@ public class JSONReport implements Report {
             
             StringBuilder builder = new StringBuilder();
             if (run.html != null) builder.append(run.html);
-            builder.append("<table border='1' style='border-collapse: collapse;'><tr><th>&#160;</th>");
-            if (methodNames != null) builder.append("<th>Name</th>");
+            builder.append("<table border='1' style='border-collapse: collapse;'><tr><th scope='col'>&#160;</th>");
+            if (methodNames != null) builder.append("<th scope='col'>Name</th>");
             for (String n : argNames) { 
-                builder.append("<th>"); 
+                builder.append("<th scope='col'>"); 
                 builder.append(HTMLReport.htmlEscape(n)); 
                 builder.append("</th>"); 
             }
-            builder.append("<th>Actual</th><th>Expected</th></tr>");
+            builder.append("<th scope='col'>Actual</th><th scope='col'>Expected</th></tr>");
             builder.append("<tr><td>");
-            if (outcomes[i]) builder.append("<span style='color: green'>Pass");
-            else builder.append("<span style='color: red'>Fail");
+            if (outcomes[i]) builder.append("<span style='color: #006400'>Pass");
+            else builder.append("<span style='color: #B00020'>Fail");
             builder.append("</span></td><td>");
             if (methodNames != null) { 
                 builder.append("<code>"); 

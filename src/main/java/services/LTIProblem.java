@@ -117,8 +117,8 @@ public class LTIProblem {
         problemNode.put("problem", problemName);
         problemNode.remove("description"); // TODO: Or let node render it? 
         String qid = "codecheck-" + repo + "-" + problemName;
-        String document = "<?xml version='1.0' encoding='UTF-8'?>\n" + 
-            "<html xmlns='http://www.w3.org/1999/xhtml'>\n" + 
+        String document = "<?xml version='1.0' encoding='UTF-8'?>\n" +
+            "<html xmlns='http://www.w3.org/1999/xhtml' lang='en'>\n" +
             "  <head>\n" + 
             "    <meta http-equiv='content-type' content='text/html; charset=UTF-8'/>\n" + 
             "    <title>Interactivities</title> \n" + 
@@ -149,7 +149,8 @@ public class LTIProblem {
             ")\n" +
             "\n//]]></script>\n" + 
             "  </head> \n" + 
-            "  <body>\n" + 
+            "  <body>\n" +
+            "    <h1 class=\"sr-only\">CodeCheck Problem</h1>\n" +
             "    <p>Submission ID: " + ltiNode.get("submissionID").asText() + "</p>" +
             "    <ol class='interactivities' id='interactivities'>\n" +
             "      <li title='" + qid + "' id='" + qid + "'>\n" + 
@@ -166,7 +167,7 @@ public class LTIProblem {
     }
     
     private static String tracerStart = "<!DOCTYPE html>\n"
-            + "<html>\n"
+            + "<html lang=\"en\">\n"
             + "<head>\n"
             + "  <meta charset=\"utf-8\">\n"
             + "  <link href='https://horstmann.com/codecheck/css/codecheck_tracer.css' rel='stylesheet' type='text/css'/>  "
@@ -191,6 +192,7 @@ public class LTIProblem {
         StringBuilder result = new StringBuilder();
         Problem.DisplayData data = problem.getProblemData();            
         result.append(tracerStart);
+        result.append("    <h1 style=\"position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;\">CodeCheck Tracer Problem</h1>\n");
         result.append("    <p>Submission ID: " + ltiNode.get("submissionID").asText() + "</p>");
         if (data.description != null)
             result.append(data.description);

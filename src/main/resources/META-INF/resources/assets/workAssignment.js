@@ -238,9 +238,10 @@ window.addEventListener('DOMContentLoaded', () => {
       
   initializeProblemSelectorUI()      
   for (let i = 0; i < assignment.problems.length; i++) {
-    const iframe = document.createElement('iframe')    
+    const iframe = document.createElement('iframe')
     iframeKey.set(iframe, problemKey(assignment.problems[i]))
     iframe.className = 'exercise-iframe'
+    iframe.title = assignment.problems[i].title || `Problem ${i + 1}`
     document.body.appendChild(iframe)
     iframe.style.display = 'none'
     addProblemSelector(i, assignment.problems[i].title)
@@ -264,10 +265,11 @@ window.addEventListener('DOMContentLoaded', () => {
       const returnToWorkURLSpan = document.getElementById('returnToWorkURL') 
       returnToWorkURLSpan.textContent = assignment.returnToWorkURL
     
-      document.getElementById('returnToWork').appendChild(createButton('hc-command', 'Copy', () => { 
-        window.getSelection().selectAllChildren(returnToWorkURLSpan) 
+      document.getElementById('returnToWork').appendChild(createButton('hc-command', 'Copy', () => {
+        window.getSelection().selectAllChildren(returnToWorkURLSpan)
         document.execCommand('copy')
-        window.getSelection().removeAllRanges() 
+        window.getSelection().removeAllRanges()
+        responseDiv.textContent = 'Copied to clipboard.'
       }))
       
       if (assignment.editKeySaved) {

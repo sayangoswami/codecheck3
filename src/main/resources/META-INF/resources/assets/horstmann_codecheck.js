@@ -16,9 +16,22 @@ window.addEventListener('load', async function () {
     const INDENT_STRING = '\u2002\u2002\u2002' // en space
     const left = document.createElement('div')
     const right = document.createElement('div')
-    let drag = undefined   
+    let drag = undefined
     let indentWidth = undefined
     const codeMap = new Map()
+    const announcer = document.createElement('div')
+    announcer.classList.add('sr-only')
+    announcer.setAttribute('role', 'status')
+    announcer.setAttribute('aria-live', 'polite')
+
+    function shortCodeOf(tile) {
+      const text = codeOf(tile).trim().split('\n')[0]
+      return text.length > 60 ? text.substring(0, 60) + '...' : text
+    }
+
+    function announce(text) {
+      announcer.textContent = text
+    }
 
     function getClientXY(e) {
       return e.touches ? {
@@ -101,8 +114,9 @@ window.addEventListener('load', async function () {
       // Still here ... move the rightBrace 
 
       right.removeChild(rightBrace)
-      left.insertBefore(rightBrace, tileDiv.nextSibling)      
+      left.insertBefore(rightBrace, tileDiv.nextSibling)
       setIndent(rightBrace, tileDiv.indent)
+      announce(`Closing brace automatically moved to match: ${shortCodeOf(tileDiv)}`)
     }
 
     function insertDroppedTileLeft(tileDiv, droppedTileX, droppedTileY) {
@@ -126,16 +140,19 @@ window.addEventListener('load', async function () {
         else 
           i++
       }      
-      if (!done) 
+      if (!done)
         left.appendChild(tileDiv)
       if (fromRight) stickyBrace(tileDiv)
+      announce(`Placed in your code, indent level ${tileDiv.indent}: ${shortCodeOf(tileDiv)}`)
       tileDiv.focus()
     }
 
     function insertDroppedTileRight(tileDiv) {
+      const description = shortCodeOf(tileDiv)
       tileDiv.parentNode.removeChild(tileDiv)
       right.appendChild(tileDiv)
       tileDiv.style.marginLeft = ''
+      announce(`Moved to tile bank: ${description}`)
       right.children[0].focus()
     }
 
@@ -178,6 +195,8 @@ window.addEventListener('load', async function () {
       else {
         tileDiv.textContent = text
         tileDiv.setAttribute('draggable', true);
+        tileDiv.setAttribute('role', 'group')
+        tileDiv.setAttribute('aria-roledescription', 'draggable code tile')
         tileDiv.tabIndex = 0
         const mousedownListener = function(e) {
           if (tileDiv !== document.activeElement) {
@@ -265,13 +284,17 @@ window.addEventListener('load', async function () {
       if (parent === right) return
       if (dy === -1) {
         let sibling = tileDiv.previousSibling
-        if (sibling != tileDiv.parentNode.firstChild)
+        if (sibling != tileDiv.parentNode.firstChild) {
           parent.insertBefore(tileDiv, sibling)
+          announce(`Moved up: ${shortCodeOf(tileDiv)}`)
+        }
       }
       else {
         let sibling = tileDiv.nextSibling
-        if (sibling) 
+        if (sibling) {
           parent.insertBefore(tileDiv, sibling.nextSibling)
+          announce(`Moved down: ${shortCodeOf(tileDiv)}`)
+        }
       }
       tileDiv.focus()
     }
@@ -283,15 +306,18 @@ window.addEventListener('load', async function () {
       if (parent === right) {
         left.appendChild(tileDiv)
         setIndent(tileDiv, 0)
+        announce(`Moved to your code: ${shortCodeOf(tileDiv)}`)
       }
       else if (0 <= indent) {
         setIndent(tileDiv, indent)
+        announce(`Indent level ${indent}: ${shortCodeOf(tileDiv)}`)
       } else {
         right.appendChild(tileDiv)
         tileDiv.style.marginLeft = 0
+        announce(`Moved to tile bank: ${shortCodeOf(tileDiv)}`)
       }
       tileDiv.focus()
-    }  
+    }
 
     const mousedownListener = function(e) {
       let focusedElement = document.activeElement
@@ -310,12 +336,28 @@ window.addEventListener('load', async function () {
         insertDroppedTileRight(focusedElement)
     }
 
-    function initialize() {  
+    function initialize() {
+      const instructionsId = 'hc-rearrange-instructions-' + Math.random().toString(36).slice(2)
+      const instructions = document.createElement('p')
+      instructions.id = instructionsId
+      instructions.classList.add('sr-only')
+      instructions.textContent = 'Reorderable code tiles. With a tile focused: up or down arrow moves it within its list; ' +
+        'left or right arrow changes its indent, or moves it between the code area and the tile bank.'
+
       left.classList.add('left')
+      left.setAttribute('role', 'group')
+      left.setAttribute('aria-label', 'Your code')
+      left.setAttribute('aria-describedby', instructionsId)
       right.classList.add('right')
+      right.setAttribute('role', 'group')
+      right.setAttribute('aria-label', 'Available code tiles')
+      right.setAttribute('aria-describedby', instructionsId)
+
       const both = document.createElement('div')
+      both.appendChild(instructions)
       both.appendChild(left)
       both.appendChild(right)
+      both.appendChild(announcer)
 
       measureIndentWidth()
 
@@ -565,10 +607,11 @@ window.addEventListener('load', async function () {
       });
     }
     let tas = editorDiv.getElementsByTagName('textarea')
+    const label = readonly ? `Reference code from ${fileName}, not editable` : `Complete this code in ${fileName}`
     for (let i = 0; i < tas.length; i++) {
-      tas[i].setAttribute('aria-label', 'Complete this code')
+      tas[i].setAttribute('aria-label', label)
     }
-  }        
+  }
 
   function createAceEditors(fileName, setup) {
     let editorsDiv = document.createElement('div')        
@@ -925,6 +968,8 @@ window.addEventListener('load', async function () {
 
       response = document.createElement('div')
       response.classList.add('codecheck-submit-response')
+      response.setAttribute('role', 'status')
+      response.setAttribute('aria-live', 'polite')
       form.appendChild(response)
       
       element.appendChild(form)

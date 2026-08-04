@@ -75,7 +75,7 @@ public class Assignment {
 	public static String editAssignmentHTML = """
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <link rel="stylesheet" href="/assets/codecheck.css"/>
@@ -90,12 +90,12 @@ public class Assignment {
 <body>
  <h1>Edit Assignment</h1>
  <div id='viewSubmissionsDiv'></div>
- <p>Enter problem URLs or IDs, one per line:</p>
+ <label style="display: block;" for="problems">Enter problem URLs or IDs, one per line:</label>
  <textarea style="display: block; width: 90%%;" id="problems" rows="10"></textarea>
- <p>Allowed CodeCheck IDs, one per line (leave blank to allow any ID a student types in):</p>
+ <label style="display: block;" for="roster">Allowed CodeCheck IDs, one per line (leave blank to allow any ID a student types in):</label>
  <textarea style="display: block; width: 90%%;" id="roster" rows="10"></textarea>
  <div id="deadlineDiv">
-    <p>Deadline (<b>Local Time</b>):</p>
+    <label style="display: block;" for="deadlineDate">Deadline (<b>Local Time</b>):</label>
     <input type="datetime-local" id="deadlineDate" name="date"/>
     <p id="deadlineLocal" style="font-weight: bold;"></p>
     <p id="deadlineUTC" style="font-weight: bold;"></p>
@@ -185,7 +185,7 @@ public class Assignment {
     public static String workAssignmentHTML = """
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <link rel="stylesheet" href="/assets/codecheck.css"/>
@@ -200,8 +200,8 @@ public class Assignment {
     <title>Your Assignment</title>
 </head>
 <body>
-   <details open="open"> 
-   <summary id="heading">Your Assignment</summary>
+   <details open="open">
+   <summary><h1 id="heading">Your Assignment</h1></summary>
    <div id="instructorInstructions">
       <p id="viewingAsInstructor">You are viewing this assignment as instructor.</p>
       <dl id="urls">
@@ -227,7 +227,7 @@ public class Assignment {
      <p id="deadline" style="font-weight: bold;"></p>
      <p id="deadlineLocal" style="font-weight: bold;"></p>
      <p id="deadlineUTC" style="font-weight: bold;"></p>
-	   <p id="savedcopy"><input type="checkbox"/>  I saved a copy of the private URL</p>
+	   <label id="savedcopy" style="display: block;"><input type="checkbox"/>  I saved a copy of the private URL</label>
    </div>
    <div id="studentLTIInstructions">
      <p>You are viewing this assignment from a Learning Management System (LMS)</p>
@@ -235,10 +235,10 @@ public class Assignment {
      <p>Wrong score in LMS? <span id="submitLTIButton"></span></p>
    </div>
    <div id="student_comment_div">
-     <label>Feedback from your instructor:</label><br>
+     <label for="student_comment">Feedback from your instructor:</label><br>
      <textarea readonly style="display: block; width: 80%%; font-size: 14px; font-weight: 500;" id="student_comment" rows="10"></textarea>
    </div>
-  <p class="message" id="response"></p>
+  <p class="message" id="response" role="status" aria-live="polite"></p>
   <p id="abovebuttons">Click on the buttons below to view all parts of the assignment.</p>
   </details>
 </body>
@@ -269,13 +269,18 @@ public class Assignment {
     public String enterID(String assignmentID, String message) throws IOException {
         if (storageConn.readAssignment(assignmentID) == null)
             throw new ServiceException("Assignment not found");
-        return enterIDHTML.formatted(message == null ? "" : message);
+        // #B00020 on white is ~7:1 contrast (WCAG AA needs 4.5:1); plain "red" is
+        // only ~4:1 and fails. role="alert" flags it as important to assistive tech.
+        String messageHTML = (message == null || message.isBlank())
+                ? ""
+                : "<p role=\"alert\" style=\"color: #B00020; font-weight: bold;\">" + message + "</p>";
+        return enterIDHTML.formatted(messageHTML);
     }
 
     private static String enterIDHTML = """
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <link rel="stylesheet" href="/assets/codecheck.css"/>
@@ -284,12 +289,12 @@ public class Assignment {
 <body>
   <h1>Enter Your CodeCheck ID</h1>
   <p>Enter the CodeCheck ID your instructor gave you. Use the same ID every time to resume your work, on any computer.</p>
-  <p style="color: red;">%s</p>
+  %s
   <form method="GET" action="">
-    <p>Your ID:</p>
-    <input type="text" name="ccid" autofocus="autofocus" required="required" />
-    <p>Enter it again to confirm:</p>
-    <input type="text" name="ccid2" required="required" />
+    <label style="display: block;" for="ccid">Your ID:</label>
+    <input type="text" id="ccid" name="ccid" autofocus="autofocus" required="required" />
+    <label style="display: block;" for="ccid2">Enter it again to confirm:</label>
+    <input type="text" id="ccid2" name="ccid2" required="required" />
     <input type="submit" value="Continue" />
   </form>
 </body>
@@ -309,7 +314,7 @@ public class Assignment {
     private static String confirmIDHTML = """
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <link rel="stylesheet" href="/assets/codecheck.css"/>
@@ -356,7 +361,7 @@ public class Assignment {
     private String viewSubmissionsHTML = """
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <link rel="stylesheet" href="/assets/codecheck.css"/>

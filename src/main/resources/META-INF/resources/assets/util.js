@@ -31,18 +31,19 @@ function createButton(clazz, label, action) {
   for (const cl of clazz.split(' '))
     button.classList.add(cl)
   button.innerHTML = label
-  button.tabIndex = 0 
+  button.tabIndex = 0
+  button.setAttribute('role', 'button')
   button.addEventListener('click', action)
   button.addEventListener('keydown', function(e) {
-    if (e.keyCode === 32) {
+    if (e.keyCode === 32 || e.keyCode === 13) { // Space or Enter
       e.stopPropagation();
       e.preventDefault();
       action()
     } else if (e.keyCode === 37 || e.keyCode === 39) {
       e.stopPropagation();
     }
-  });      
-  return button    
+  });
+  return button
 }
 
 function percent(score) {

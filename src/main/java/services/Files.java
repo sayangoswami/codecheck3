@@ -28,7 +28,7 @@ public class Files {
     
     String start2 = """
 		<!DOCTYPE html>
-		<html><head>
+		<html lang="en"><head>
 		<title>CodeCheck</title>\
 		<meta http-equiv='content-type' content='text/html; charset=UTF-8' />
 		<script src='/assets/download.js'></script>
@@ -41,6 +41,7 @@ public class Files {
 		<link type='text/css' rel='stylesheet' href='/assets/codecheck.css'/>
 		<link type='text/css' rel='stylesheet' href='/assets/horstmann_codecheck.css'/>
 		</head><body>
+		<h1 class="sr-only">CodeCheck Problem</h1>
 		""";
     String mid2 = """
     	<div class='horstmann_codecheck'><script type='text/javascript'>//<![CDATA[ 
@@ -81,7 +82,7 @@ public class Files {
     
     private static String tracerStart = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <link href='https://horstmann.com/codecheck/css/codecheck_tracer.css' rel='stylesheet' type='text/css'/>  \
@@ -113,6 +114,7 @@ public class Files {
         Problem.DisplayData data = problem.getProblemData();
         StringBuilder result = new StringBuilder();
         result.append(tracerStart);
+        result.append("<h1 style=\"position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;\">CodeCheck Tracer Problem</h1>\n");
         if (data.description != null)
             result.append(data.description);
         result.append(tracerScriptStart);
