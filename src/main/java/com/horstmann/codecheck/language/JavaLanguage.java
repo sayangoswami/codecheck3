@@ -24,7 +24,8 @@ public class JavaLanguage implements Language {
     }
 
     private static Pattern mainPattern = Pattern
-            .compile("public\\s+static\\s+void\\s+main\\s*\\(\\s*String(\\s*\\[\\s*\\]\\s*\\p{javaJavaIdentifierStart}\\p{javaJavaIdentifierPart}*|\\s+\\p{javaJavaIdentifierStart}\\p{javaJavaIdentifierPart}*\\s*\\[\\s*\\])\\s*\\)");
+            .compile("(public\\s+static\\s+void\\s+main\\s*\\(\\s*String(\\s*\\[\\s*\\]\\s*\\p{javaJavaIdentifierStart}\\p{javaJavaIdentifierPart}*|\\s+\\p{javaJavaIdentifierStart}\\p{javaJavaIdentifierPart}*\\s*\\[\\s*\\])\\s*\\))" +
+                     "|(void\\s+main\\s*\\(\\s*(String[^)]*)?\\))");  // Java 25 unnamed class: void main() or void main(String[] args)
 
     @Override 
     public Pattern mainPattern() { return mainPattern; }
