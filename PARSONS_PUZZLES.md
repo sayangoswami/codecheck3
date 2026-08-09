@@ -268,17 +268,32 @@ Points this adds beyond example 1:
 1. Write the working solution first, as an ordinary graded problem (`//CALL`
    or `//IN` cases that actually exercise every branch you plan to make
    draggable).
-2. Wrap the body you want draggable in `//TILE` … `//FIXED`. Leave
+2. **If using `//IN`, verify the input count.** Count every `IO.readln()` /
+   `nextInt()` / `nextLine()` call in the solution (including those inside
+   the tile region) and confirm the `//IN` value has exactly that many
+   `\n`-separated fields. For programs that read control values then data in
+   a loop — e.g. `rows`, `cols`, then `rows × cols` entries — you need
+   `1 + 1 + rows × cols` fields total. An off-by-one here causes the
+   automated checker to submit a correct tile arrangement that throws an
+   exception at runtime, so the puzzle scores 0/1 even when it looks right.
+   Also, each `//IN` annotation must be exactly one physical line in the
+   file — see the `//IN` section in `CODE_AUTHORING.md` for the escape
+   sequence rules.
+3. Wrap the body you want draggable in `//TILE` … `//FIXED`. Leave
    boilerplate (signature, imports, scaffolding) outside — it'll be fixed
    automatically if it's before the first `//TILE`, or you can push it back
    into a fixed region mid-file with `//FIXED`.
-3. For each line where a plausible-but-wrong version exists, add `//OR
+4. For each line where a plausible-but-wrong version exists, add `//OR
    <wrong version>` directly after it — and make sure at least one of your
    test cases actually fails when that wrong version is used. An untested
    distractor is a silent hole in the puzzle.
-4. Only use global distractors (an `//OR` block placed right after
+5. Only use global distractors (an `//OR` block placed right after
    `//FIXED` or before the first `//TILE`) for structural red herrings that
    don't belong to one specific line (stray braces, a bogus whole block).
-5. If the underlying algorithm is more useful to reason about at a
+6. If the underlying algorithm is more useful to reason about at a
    conceptual level than a syntax level, add `//PSEUDO` labels to show
    plain-English tiles instead of raw code.
+7. **Use `index.md` (not `index.html`)** when using `tools/upload_problems.py`
+   to batch-upload. The script looks for `index.md` to detect problem
+   directories and converts it to `index.html` during upload. A directory
+   with only `index.html` is silently skipped by the upload script.

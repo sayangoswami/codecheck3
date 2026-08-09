@@ -42,8 +42,14 @@ A tracer problem directory contains:
 - **`tracer.js`** — the exercise script (required; its mere presence is what
   marks the directory as a tracer problem — see "How detection works"
   below).
-- **`index.html`** — the problem description/instructions shown above the
-  tracer widget (same role as in ordinary problems).
+- **`index.md`** — the problem description/instructions shown above the
+  tracer widget, written in Markdown. When uploading via
+  `tools/upload_problems.py`, the script converts `index.md` to `index.html`
+  automatically. **Do not put `index.html` directly in the directory** — the
+  upload script detects problem directories by looking for `index.md`, and a
+  directory with only `index.html` is silently skipped. If you're deploying
+  a problem zip manually (not via the upload script), you can include
+  `index.html` directly instead.
 - **A placeholder source file** (e.g. `Placeholder.java`) — an otherwise
   empty file whose only job is to have the right extension so CodeCheck's
   language detection succeeds. It is never compiled or run. Copy this
@@ -427,8 +433,11 @@ random values by round-tripping `state` through `sim.start(state)`.
 
 ## Checklist when authoring a new tracer problem
 
-1. Write `index.html` with a short instructional blurb (what the student is
-   tracing and what to do — click lines, type values, etc.).
+1. Write `index.md` with a short instructional blurb (what the student is
+   tracing and what to do — click lines, type values, etc.). Use `index.md`
+   (Markdown), not `index.html` — the `tools/upload_problems.py` script
+   requires `index.md` to detect the directory as a problem and converts it
+   to `index.html` on upload.
 2. Add a `Placeholder.<ext>` file matching the traced language so language
    detection succeeds; leave it empty/inert.
 3. In `tracer.js`, build the `Code` panel from the real program text, then

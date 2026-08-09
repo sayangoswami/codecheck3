@@ -141,6 +141,52 @@ Use `//HIDE`/`//SHOW` when you just want the student to see less code (with
 no expectation they'll write anything in that spot). Use `//EDIT` when you
 want an editable fill-in-the-blank box in place of the hidden code.
 
+**Critical:** the text after `//EDIT` is the *initial content of the
+editable box the student sees* — it is a scaffold or placeholder, **not a
+copy of the hidden solution code**. Never repeat the solution inside the
+`//EDIT` region; students can read it and copy it without doing any work.
+
+**Pattern: "implement this class" (Java 25 unnamed-class style)**
+
+For problems where the student must write a class and `void main()` uses
+it, the recommended structure is:
+
+```java
+//IN 4\nAlice\n85\nBob\n92\nCarol\n70\nDave\n55
+//IN 3\nAna\n60\nBen\n60\nCas\n60
+//REQUIRED IO\.println
+//HIDE
+class Student {                    ← full solution, hidden from student
+    String name;
+    int grade;
+    Student(String name, int grade) {
+        this.name = name;
+        this.grade = grade;
+    }
+    boolean isPassing() { return grade >= 60; }
+}
+//EDIT class Student {             ← scaffold: what student sees/edits
+//EDIT     ...
+//EDIT }
+void main() {                      ← visible, read-only; shows class usage
+    int n = Integer.parseInt(IO.readln());
+    Student[] students = new Student[n];
+    for (int i = 0; i < n; i++) {
+        students[i] = new Student(IO.readln(), Integer.parseInt(IO.readln()));
+    }
+    // ... aggregate and print
+}
+```
+
+Key points:
+- `void main()` goes *after* the `//EDIT` block so it is visible to
+  students as read-only context (showing how the class is used) and is
+  included in their submission for compilation.
+- The `//EDIT` block contains only a minimal skeleton (`class Foo { ... }`),
+  not the solution fields, constructor, and methods.
+- `void main()` is *not* inside the `//HIDE` block — it is read-only code
+  that the student sees but cannot edit.
+
 ### `//CALL` and `//CALL HIDDEN` — method-call unit testing, no harness needed
 Stack one or more `//CALL <args>` lines directly above a method declaration.
 CodeCheck synthesizes a small driver that calls that method with the given
@@ -214,6 +260,42 @@ Each `//IN` line is one full run's worth of stdin, using Java-style escapes
 (`\n` for newline, `\uXXXX`, etc.). `//IN HIDDEN` is scored but not shown in
 detail. For long inputs, prefer a `test.in`/`test2.in`/... file on disk
 instead of an inline `//IN` line.
+
+**Critical formatting rules:**
+
+1. **Each `//IN` annotation is exactly one line in the file.** The `\n`
+   characters inside the value are *escape sequences* (two characters: a
+   literal backslash followed by `n`), not actual newlines. The next actual
+   newline in the file terminates the annotation and begins the next line of
+   source code. If you generate problem files programmatically, make sure
+   your generator emits `\n` as the two-character sequence `\\n` inside the
+   annotation value — not as a Python/shell newline — and that the code
+   following the last `//IN` annotation starts on its own separate physical
+   line.
+
+   **Wrong** (what happens when a generator merges lines):
+   ```
+   //IN 0\nvoid main() {\nint n = Integer.parseInt(IO.readln());
+   ```
+   **Correct** (three separate lines in the file):
+   ```
+   //IN 0
+   void main() {
+   int n = Integer.parseInt(IO.readln());
+   ```
+
+2. **Count your `readln()` calls.** Before finalizing a `//IN` value,
+   trace through the solution manually and count exactly how many times
+   `IO.readln()` (or `Scanner.nextInt()` / `nextLine()`, etc.) is called
+   per run. The number of `\n`-separated fields in your `//IN` value must
+   equal that count. Off-by-one is especially easy to miss with nested
+   loops: a program that reads `rows` then `cols` then `rows × cols` data
+   values needs `1 + 1 + rows × cols` fields total — not just `rows + cols`.
+
+   **Example** (rows=3, cols=2 → needs 3×2=6 data values, 8 total fields):
+   ```java
+   //IN 3\n2\n4\n6\n8\n10\n12\n14
+   ```
 
 ### `//OUT` — output files to capture and diff
 ```java
@@ -338,6 +420,16 @@ file is "the" program to run) recognizes two forms:
   solution file — an unrelated instance method that happens to be named
   `main` with a compatible signature would also be picked up as the file's
   entry point.
+
+**Failure mode if `void main()` is not recognized:** the problem uploads
+successfully, but when checked it shows **Score 0 / 0 test cases** with no
+error message. This happens because `isMain()` returns false for every file,
+`mainSourcePaths` stays empty, and `testInputs()` is never called —
+`//IN` annotations are parsed correctly but silently ignored. If you see
+this symptom, check that `JavaLanguage.mainPattern` (in
+`src/main/java/com/horstmann/codecheck/language/JavaLanguage.java`) includes
+the `void\s+main\s*\(` alternative alongside the traditional
+`public\s+static\s+void\s+main` pattern.
 
 ## Bulk-uploading problems: `tools/upload_problems.py`
 
