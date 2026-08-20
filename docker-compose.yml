@@ -26,12 +26,18 @@ services:
     networks:
       - codecheck-internal
       - default
+    volumes:
+      # Bind-mounted so problems + assignments + submissions persist across
+      # container restarts/rebuilds and can be backed up as a plain folder.
+      # Relative path: resolved against this compose file's own directory,
+      # so it needs no hardcoded username or $HOME expansion.
+      - ./codecheck-data:/data/codecheck
     environment:
       COM_HORSTMANN_CODECHECK_COMRUN_REMOTE: http://comrun-java:8080/api/upload
-      # Local-filesystem storage is fine for this local test. Switch to
-      # COM_HORSTMANN_CODECHECK_STORAGE_TYPE=sql (+ a postgres service, see
-      # DEPLOYMENT.md's Appendix) once this is serving real students and you
-      # need submissions to survive a container restart.
+      # The default storage path (/opt/codecheck/repo) isn't writable by the
+      # non-root `javauser` the image runs as (Dockerfile.jvm), so point it
+      # at the bind-mounted volume above instead.
+      COM_HORSTMANN_CODECHECK_STORAGE_LOCAL: /data/codecheck/repo
     depends_on:
       - comrun-java
     restart: unless-stopped
