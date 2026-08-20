@@ -1,0 +1,42 @@
+services:
+  comrun-java:
+    build: ./comrun-java
+    # No ports: published to the host at all — only reachable from other
+    # containers on codecheck-internal, never from localhost or the internet.
+    networks:
+      - codecheck-internal
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    restart: unless-stopped
+
+  codecheck-webapp:
+    build:
+      context: .
+      dockerfile: src/main/docker/Dockerfile.jvm
+    ports:
+      - "127.0.0.1:8080:8080"   # bind to loopback only; cloudflared connects locally
+    networks:
+      - codecheck-internal
+      - default
+    environment:
+      COM_HORSTMANN_CODECHECK_COMRUN_REMOTE: http://comrun-java:8080/api/upload
+      # Local-filesystem storage is fine for this local test. Switch to
+      # COM_HORSTMANN_CODECHECK_STORAGE_TYPE=sql (+ a postgres service, see
+      # DEPLOYMENT.md's Appendix) once this is serving real students and you
+      # need submissions to survive a container restart.
+    depends_on:
+      - comrun-java
+    restart: unless-stopped
+
+networks:
+  codecheck-internal:
+    internal: true   # no route out to the internet or the host's LAN
+  default:
