@@ -47,3 +47,4 @@ release.properties
 
 # Plugin directory
 /.quarkus/cli/plugins/
+codecheck-data/
