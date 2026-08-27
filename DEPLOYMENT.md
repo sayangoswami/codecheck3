@@ -211,6 +211,89 @@ everything with `docker compose up -d`. You're responsible for HTTPS/domain setu
 scenario (typically via a reverse proxy like Caddy or nginx in front) — PaaS providers usually give
 you that for free, which is the main convenience they add over this approach.
 
+## Appendix: exposing the interactive Java runner for Quarto slides
+
+`comrun-java` has a second job beyond the codecheck grading protocol: `server.js` also serves
+`POST /run/java` and a WebSocket at `/run/java/ws` (code in `comrun-java/lib/interactive.js`).
+These compile and run a single ad-hoc Java class with live stdin — the backend for a "Run this
+snippet" button in lecture material. The `java-runner` Quarto extension (a Lua filter + CodeMirror editor, kept in the course
+material repo under `_extensions/java-runner/`) talks to `/run/java/ws` with exactly this
+protocol, so `{.java .runnable}` code blocks in Quarto/RevealJS slides become runnable with no
+code changes on either side.
+
+Nothing extra is needed for grading — only for these interactive routes, and only if you want
+them reachable from a browser. The committed `docker-compose.yml` keeps `comrun-java` off every
+published port by default; batch grading reaches it container-to-container over the
+`codecheck-internal` network. To expose the interactive routes:
+
+1. **Publish `comrun-java` on a loopback port.** In `docker-compose.yml`, give the `comrun-java`
+   service a `ports:` entry and put it on a non-`internal` network (port publishing needs a
+   route from the host):
+
+   ```yaml
+   comrun-java:
+     ports:
+       - "127.0.0.1:8081:8080"   # loopback only — the tunnel connects locally
+     networks:
+       - codecheck-internal
+       - default
+   ```
+
+   Keep the bind on `127.0.0.1` so the port is never on the host's LAN or the internet — only
+   whatever you point at it locally (a tunnel or reverse proxy) decides what's public.
+
+2. **Route a hostname to it.** Our deployment fronts everything with a named Cloudflare Tunnel
+   (`cloudflared`, running as a `systemctl --user` service — no root). Add an ingress rule in
+   `~/.cloudflared/config.yml`, above the required `http_status:404` catch-all:
+
+   ```yaml
+   ingress:
+     - hostname: java-runner.example.dev
+       service: http://localhost:8081
+     # ...existing rules...
+     - service: http_status:404
+   ```
+
+   Then create the DNS record and restart the tunnel:
+
+   ```bash
+   cloudflared tunnel route dns <tunnel-name> java-runner.example.dev
+   systemctl --user restart cloudflared
+   podman compose up -d comrun-java   # recreate with the new port
+   curl -sN https://java-runner.example.dev/api/health   # expect {"status":"ok"}
+   ```
+
+   Cloudflare Tunnel proxies WebSockets automatically, so `/run/java/ws` works through it with
+   no extra config. A plain nginx/Caddy reverse proxy works too — it just needs the usual
+   `Upgrade`/`Connection` headers for the WebSocket path.
+
+3. **Point the slides at the hostname.** In the Quarto project's `_quarto.yml`:
+
+   ```yaml
+   filters:
+     - java-runner
+   java-runner:
+     server-url: "https://java-runner.example.dev"
+   ```
+
+   The filter rewrites `https`→`wss` itself, so it connects to
+   `wss://java-runner.example.dev/run/java/ws`.
+
+**Things to know about the interactive routes:**
+
+- They have **no OS-user or container sandbox** — the only guard is a static source scan
+  (`comrun-java/lib/blacklist.js`) that rejects `Runtime`, `ProcessBuilder`, `Thread`,
+  `java.net`, reflection, `System.exit`, etc. before `javac` runs, plus the container hardening
+  in `docker-compose.yml` (`read_only`, `cap_drop: ALL`, `no-new-privileges`, `mem_limit`,
+  `pids_limit`). This is aimed at intro courses, not adversarial input. Expose the hostname
+  deliberately.
+- Per-run limits (in `interactive.js`): 10 s to compile, 120 s wall-clock to run, 128 MB heap,
+  headless (no Swing/AWT windows).
+- Rate limit is **30 requests/minute per client IP**, shared with the `/api/upload` grading
+  endpoint (`RATE_LIMIT` in `comrun-java/server.js`). Fine for an instructor clicking Run during
+  a lecture; a whole class running snippets from behind one campus NAT will share that budget —
+  raise it there if needed.
+
 ## Troubleshooting
 
 Problems we actually hit while setting up our own deployment, in case they recur:

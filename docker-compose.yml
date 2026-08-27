@@ -1,10 +1,15 @@
 services:
   comrun-java:
     build: ./comrun-java
-    # No ports: published to the host at all — only reachable from other
-    # containers on codecheck-internal, never from localhost or the internet.
+    # Batch grading (/api/upload) is reached container-to-container over
+    # codecheck-internal. The loopback port below is published ONLY so the
+    # host's cloudflared can expose the interactive /run/java + /run/java/ws
+    # routes for Quarto lecture slides — bound to 127.0.0.1, never the LAN.
+    ports:
+      - "127.0.0.1:8081:8080"
     networks:
       - codecheck-internal
+      - default
     read_only: true
     tmpfs:
       - /tmp:size=512m,mode=1777
