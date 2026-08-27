@@ -2,7 +2,11 @@ target/
 .git/
 samples/
 cli/
-comrun/
+# comrun/bin is kept in-context: comrun-gpu/Dockerfile COPYs it (the GPU
+# instance reuses the stock bash comrun engine). It's ~17KB; the webapp
+# Dockerfiles just ignore it.
+comrun/*
+!comrun/bin
 comrun-java/
 tools/
 .claude/

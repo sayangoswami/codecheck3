@@ -1,0 +1,13 @@
+<p>
+Deployment smoke test for the GPU CodeCheck instance. Write a function
+<code>sum_of_doubles(n)</code> that:
+</p>
+<ul>
+  <li>builds the array <code>0, 1, 2, &hellip;, n-1</code>,</li>
+  <li>doubles every element using a <code>numba.cuda</code> kernel, and</li>
+  <li>returns the sum of the doubled array as an <code>int</code>, computed with CuPy on the device.</li>
+</ul>
+<p>For example, <code>sum_of_doubles(8)</code> returns <code>56</code> and
+<code>sum_of_doubles(100)</code> returns <code>9900</code>.</p>
+<p>If this problem checks green, <code>numba-cuda</code> kernel launches, host/device
+transfers, and CuPy reductions all work in the deployed <code>comrun-gpu</code>.</p>

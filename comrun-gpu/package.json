@@ -1,0 +1,13 @@
+{
+  "name": "comrun-gpu",
+  "version": "1.0.0",
+  "description": "Concurrency-gated comrun gateway for the GPU (numba-cuda / CuPy) CodeCheck instance",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "formidable": "^3.5.2"
+  }
+}

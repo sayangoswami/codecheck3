@@ -294,6 +294,148 @@ published port by default; batch grading reaches it container-to-container over 
   a lecture; a whole class running snippets from behind one campus NAT will share that budget —
   raise it there if needed.
 
+## Appendix: a GPU instance for numba-cuda / CuPy
+
+For a course whose problems use `numba.cuda` or CuPy, run a **second, self-contained CodeCheck
+instance** next to the main one. Nothing in the main stack changes; the GPU stack has its own
+webapp, its own comrun, its own storage volume, its own loopback port, and its own hostname.
+Keeping it separate means untrusted CUDA code only ever touches the GPU box, and the main
+courses are unaffected if the GPU instance needs a restart.
+
+The checker engine already treats Python as first-class (`PythonLanguage`); `numba`/`cupy` are
+just imports, so no engine changes are needed. `comrun-java` can't help here (Java only), so the
+GPU instance uses the original bash `comrun` engine (which already handles Python) in a
+CUDA-enabled image, behind a small concurrency-gating gateway.
+
+Files: `comrun-gpu/` (Dockerfile + `server.js` gateway) and `docker-compose.gpu.yml`.
+
+### Step 1 — GPU passthrough to rootless podman
+
+The container gets the GPU through the **NVIDIA Container Toolkit** using **CDI** (Container
+Device Interface), which is the mechanism that works cleanly with *rootless* podman — no
+`--privileged`, no root daemon. The host needs a working NVIDIA driver already (`nvidia-smi`
+runs). Then, as admin:
+
+```bash
+# 1. Add the toolkit repo and install it
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+
+# 2. Generate the CDI spec describing this host's GPUs.
+#    nvidia-ctk 1.20 emits `cdiVersion: 0.7.0` (it adds device-level
+#    `additionalGids` for /dev/dri). podman < 5.0 (Ubuntu 24.04 ships 4.9.3)
+#    only loads specs up to 0.6.0 and rejects the whole file ("unresolvable
+#    CDI devices" / "spec version must be at least v0.7.0"). The helper below
+#    drops the /dev/dri GIDs (not needed for CUDA compute) and relabels the
+#    spec 0.6.0. (Older nvidia-ctk had --cdi-version; 1.20 dropped it.)
+sudo mkdir -p /etc/cdi
+comrun-gpu/make-cdi-spec.sh | sudo tee /etc/cdi/nvidia.yaml > /dev/null
+sudo rm -f /run/cdi/nvidia.yaml /var/run/cdi/nvidia.yaml   # drop any stale 0.7.0 copy
+
+# 3. (rootless only) let the toolkit skip cgroup setup it can't do unprivileged
+sudo nvidia-ctk config --in-place --set nvidia-container-cli.no-cgroups=true
+```
+
+(On a future podman ≥ 5.0, skip the helper — `sudo nvidia-ctk cdi generate
+--output=/etc/cdi/nvidia.yaml` is enough.)
+
+Then, as **your normal user** (no sudo), verify:
+
+```bash
+nvidia-ctk cdi list          # should list  nvidia.com/gpu=all  and per-index devices
+podman run --rm --device nvidia.com/gpu=all \
+  nvidia/cuda:13.0.1-base-ubuntu24.04 nvidia-smi   # should print the GPU table
+```
+
+Re-run `comrun-gpu/make-cdi-spec.sh | sudo tee /etc/cdi/nvidia.yaml` after any host driver
+upgrade — the spec pins driver library paths (they contain the driver version).
+
+### Step 2 — build and start the GPU stack
+
+Use **`podman-compose`** (the standalone `/usr/bin/podman-compose`, not `podman compose`) for
+this stack. `podman compose` shells out to `docker-compose`, which rewrites the CDI device name
+`nvidia.com/gpu=all` into a `src:dst:rwm` triple that podman can't resolve; `podman-compose`
+passes it straight through to `podman run --device`.
+
+```bash
+cd ~/Repos/codecheck3
+podman-compose -f docker-compose.gpu.yml up -d --build
+
+# sanity-check the GPU stack: kernel compiler + CuPy visible to the run user
+podman-compose -f docker-compose.gpu.yml run --rm comrun-gpu \
+  sudo -u comrunner python3 -c "import cupy, numba.cuda; print(numba.cuda.detect())"
+```
+
+(The main `docker-compose.yml` has no GPU device line, so it stays on `podman compose` as
+before — only this GPU stack needs `podman-compose`.)
+
+The CUDA version in `comrun-gpu/Dockerfile` (`nvidia/cuda:13.0.1-devel-…`, `cupy-cuda13x`) must
+be **≤ the “CUDA Version” shown by `nvidia-smi`** on the host (13.2 here). Bump the tag and the
+cupy wheel together (keep them on the same major) if your driver changes.
+
+### Step 3 — give it a hostname
+
+Same as any other service fronted by the tunnel (see the Quarto appendix for the mechanics).
+Add to `~/.cloudflared/config.yml`, above the catch-all:
+
+```yaml
+  - hostname: gpu-codecheck.example.dev
+    service: http://localhost:8082
+```
+
+```bash
+cloudflared tunnel route dns <tunnel-name> gpu-codecheck.example.dev
+systemctl --user restart cloudflared
+curl -s https://gpu-codecheck.example.dev/health   # webapp health
+```
+
+### Step 4 — smoke-test the deployment
+
+`samples/python/gpu-smoke/` is a problem that launches a `numba.cuda` kernel *and* does a CuPy
+reduction. Upload it through the instructor UI (or the CLI against `http://localhost:8082`) and
+check it grades green — that exercises kernel launch, host/device transfer, and CuPy in the real
+`comrun-gpu` container.
+
+### Concurrency cap
+
+One in-flight job ≈ one Python process ≈ one CUDA context (~300–600 MB VRAM *before* any data).
+A class submitting at once would otherwise spawn dozens at once and exhaust the card. The
+`comrun-gpu/server.js` gateway limits this:
+
+| env var (set in `docker-compose.gpu.yml`) | default | meaning |
+|---|---|---|
+| `COMRUN_MAX_CONCURRENCY` | `3` | jobs running at once; raise toward `VRAM / 0.6 GB` minus headroom |
+| `COMRUN_MAX_QUEUE` | `30` | waiters allowed to queue before clients get `503` |
+| `COMRUN_QUEUE_TIMEOUT_MS` | `45000` | how long a queued request waits before `503` |
+| `COMRUN_JOB_TIMEOUT_MS` | `75000` | hard cap on a single `comrun` invocation |
+
+The webapp's HTTP client to comrun (`checker.Util.fileUpload`) has a **hard 90-second timeout**,
+so `COMRUN_QUEUE_TIMEOUT_MS + COMRUN_JOB_TIMEOUT_MS` must stay under that — keep problem run
+timeouts modest. `GET /api/health` on `comrun-gpu` reports `active` and `queued` so you can watch
+it during an exam. A `503` (or a client-side timeout) surfaces to the student as a checker error,
+not a silent failure — they just click *Submit* again once the queue drains.
+
+### Things to know
+
+- **Weaker sandbox than `comrun-java`.** The bash `comrun` engine uses `sudo` to drop to the
+  `comrunner` OS user, so this image *cannot* use `cap_drop: ALL` / `no-new-privileges`.
+  Isolation is the unprivileged `comrunner` user + the container `mem_limit`/`pids_limit`/`cpus`
+  + `preload.sh`'s `ulimit` on file size. There is **no** source blacklist. Treat it as "runs
+  code from enrolled students during a proctored exam", not "internet-facing".
+- **`preload.sh` ulimit patch.** The Dockerfile `sed`s the `ulimit -d/-v/-n` caps out of
+  `preload.sh` (keeping only the file-size cap), because CUDA reserves tens of GB of *virtual*
+  address space on context creation and the stock ~100 MB `-v` cap makes every GPU program fail
+  instantly. Real memory is bounded by the container `mem_limit` instead.
+- **GPU memory isn't limited by `mem_limit`** (that's host RAM). Capping VRAM per job needs CUDA
+  MPS or MIG — out of scope; the concurrency cap is the practical control.
+- **A hung/faulting kernel can wedge the GPU** until `podman-compose -f docker-compose.gpu.yml
+  restart comrun-gpu` (or, rarely, a host GPU reset). Keep problem sizes small and timeouts
+  tight.
+
 ## Troubleshooting
 
 Problems we actually hit while setting up our own deployment, in case they recur:
@@ -310,3 +452,21 @@ Problems we actually hit while setting up our own deployment, in case they recur
 - **`UnsupportedClassVersionError` or similar at startup.** The Docker image's Java version doesn't
   match what the project was compiled for. This repo targets Java 25 throughout — if you're
   customizing the Dockerfile, keep both the build stage and run stage on Java 25.
+- **GPU instance: `numba.cuda` finds no device but `nvidia-smi` works in the container.** Almost
+  always a `/dev/nvidia*` permission issue for the unprivileged `comrunner` user. The Dockerfile
+  adds `comrunner` to the `video` group; if the CDI spec created the device nodes with a
+  different owner, regenerate it (`sudo nvidia-ctk cdi generate`) or check the node modes.
+- **GPU instance: `unresolvable CDI devices` / `nvidia-ctk cdi list` warns "spec version must be
+  at least v0.7.0" and finds 0 devices.** podman 4.9 can't load nvidia-ctk 1.20's 0.7.0 spec.
+  Install the spec via `comrun-gpu/make-cdi-spec.sh` (step 2), which strips the one 0.7.0-only
+  field. If `nvidia-ctk cdi list` just says "Found 0 CDI devices" with no warning, no spec is
+  installed at all — same fix. Remove stale copies under `/run/cdi/` too.
+- **GPU instance: `nvidia-container-cli: ... cgroup` error on rootless podman.** Run
+  `sudo nvidia-ctk config --in-place --set nvidia-container-cli.no-cgroups=true` and retry.
+- **GPU instance: `nvidia-smi` fails inside the container.** If you used `podman compose` (the
+  docker-compose provider) instead of `podman-compose`, it mangled the `nvidia.com/gpu=all`
+  device name. Use `podman-compose -f docker-compose.gpu.yml up -d` for this stack.
+- **GPU instance: image build fails at the `sed ... preload.sh` step.** That step strips
+  `preload.sh`'s `ulimit -v`/`-n` caps (CUDA needs tens of GB of *virtual* address space) and
+  then asserts none survived. If upstream changed the `ulimit` line format the assertion trips —
+  update the `sed` pattern in `comrun-gpu/Dockerfile` to match the new lines.

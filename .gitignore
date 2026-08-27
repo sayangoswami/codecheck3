@@ -48,3 +48,5 @@ release.properties
 # Plugin directory
 /.quarkus/cli/plugins/
 codecheck-data/
+codecheck-gpu-data/
+comrun-gpu/node_modules/
