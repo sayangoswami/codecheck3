@@ -79,6 +79,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -107,6 +108,10 @@ public class StorageConnector {
 
     public void writeProblem(byte[] contents, String repo, String key) throws IOException {
         delegate.writeProblem(contents, repo, key);
+    }
+
+    public void deleteProblem(String repo, String key) throws IOException {
+        delegate.deleteProblem(repo, key);
     }
 
     public ObjectNode readAssignment(String assignmentID) throws IOException {
@@ -199,6 +204,7 @@ public class StorageConnector {
 interface StorageConnection {
     byte[] readProblem(String repo, String key) throws IOException;
     void writeProblem(byte[] contents, String repo, String key) throws IOException;
+    void deleteProblem(String repo, String key) throws IOException;
     ObjectNode readAssignment(String assignmentID) throws IOException;
     String readLegacyLTIResource(String resourceID) throws IOException;
     String readLTISharedSecret(String oauthConsumerKey) throws IOException;
@@ -361,6 +367,20 @@ class AWSStorageConnection implements StorageConnection {
         } catch (Exception ex) {
             String bytes = Arrays.toString(contents);
             logger.log(Logger.Level.ERROR, "S3Connection.putToS3: Cannot put " + bytes.substring(0, Math.min(50, bytes.length())) + "... to " + bucketName);
+            throw ex;
+        }
+    }
+
+    public void deleteProblem(String repo, String key) {
+        String bucketName = repo + "." + bucketSuffix;
+        try {
+            s3Client.deleteObject(
+                    DeleteObjectRequest.builder()
+                            .bucket(bucketName)
+                            .key(key)
+                            .build());
+        } catch (Exception ex) {
+            logger.log(Logger.Level.ERROR, "S3Connection.deleteProblem: Cannot delete " + key + " from " + bucketName);
             throw ex;
         }
     }
@@ -644,6 +664,16 @@ class LocalStorageConnection implements StorageConnection {
         }
     }
 
+    public void deleteProblem(String repo, String key) throws IOException {
+        try {
+            Path filePath = root.resolve("Problems").resolve(repo).resolve(key + ".zip");
+            Files.deleteIfExists(filePath);
+        } catch (IOException ex) {
+            logger.log(Logger.Level.ERROR, "ProblemLocalConnection.delete : Cannot delete " + key + " from " + repo);
+            throw ex;
+        }
+    }
+
 
     public ObjectNode readAssignment(String assignmentID) throws IOException {
         return readJsonObject("CodeCheckAssignments", assignmentID);
@@ -855,6 +885,18 @@ DO UPDATE SET contents = EXCLUDED.contents
                 ps.setBytes(3, contents);
                 ps.executeUpdate();
             }
+        } catch (SQLException ex) {
+            logger.log(Logger.Level.ERROR, ex.getMessage());
+            throw new IOException(ex);
+        }
+    }
+
+    public void deleteProblem(String repo, String key) throws IOException {
+        try (Connection conn = config.getDatabaseConnection()) {
+            PreparedStatement ps = conn.prepareStatement("DELETE FROM Problems WHERE repo = ? AND key = ?");
+            ps.setString(1, repo);
+            ps.setString(2, key);
+            ps.executeUpdate();
         } catch (SQLException ex) {
             logger.log(Logger.Level.ERROR, ex.getMessage());
             throw new IOException(ex);

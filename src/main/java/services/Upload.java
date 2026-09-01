@@ -3,7 +3,9 @@ package services;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -20,6 +22,7 @@ import com.horstmann.codecheck.checker.Util;
 public class Upload {
     private static final String DEFAULT_REPO = "ext";
     @Inject private CodeCheck codeCheck;
+    @Inject controllers.Config config;
 
     private Map<Path, byte[]> checkEditKey(String problem, String editKey) throws IOException {
         Map<Path, byte[]> problemFiles = codeCheck.loadProblem(DEFAULT_REPO, problem);
@@ -127,6 +130,47 @@ public class Upload {
         }
         problemFiles.put(Path.of("edit.key"), Util.createPrivateUID().getBytes(StandardCharsets.UTF_8));
         return saveProblemAndReport(requestPrefix, id, problemFiles);
+    }
+
+    /** Deletes a single problem, authorised by that problem's own edit key. */
+    public void deleteProblem(String problemID, String editKey)
+            throws IOException, BadProblemIdException {
+        String id = sanitizeProblemId(problemID);
+        checkEditKey(id, editKey); // throws SecurityException on a bad key, IOException if the problem is gone
+        codeCheck.deleteProblem(DEFAULT_REPO, id);
+    }
+
+    /**
+     * Deletes many problems at once, authorised by the server-wide admin
+     * password (config key com.horstmann.codecheck.admin.password; batch
+     * delete is disabled when it is unset). Blank lines and lines starting
+     * with '#' are skipped. Returns a map of id -&gt; reason for every id that
+     * could not be deleted; an empty map means every id was removed.
+     */
+    public Map<String, String> deleteProblems(String adminPassword, List<String> problemIDs) {
+        String expected = config.getString("com.horstmann.codecheck.admin.password");
+        if (expected == null || expected.isBlank())
+            throw new SecurityException("Batch delete is disabled: no admin password configured");
+        if (adminPassword == null || !MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8), adminPassword.getBytes(StandardCharsets.UTF_8)))
+            throw new SecurityException("Bad admin password");
+
+        Map<String, String> failures = new LinkedHashMap<>();
+        for (String raw : problemIDs) {
+            String line = raw.strip();
+            if (line.isEmpty() || line.startsWith("#")) continue;
+            try {
+                String id = sanitizeProblemId(line);
+                if (!problemExists(id)) {
+                    failures.put(line, "not found");
+                    continue;
+                }
+                codeCheck.deleteProblem(DEFAULT_REPO, id);
+            } catch (BadProblemIdException | IOException ex) {
+                failures.put(line, ex.getMessage());
+            }
+        }
+        return failures;
     }
 
     public String checkAndSaveProblem(String requestPrefix, String problem, Map<Path, byte[]> problemFiles, String editKey)

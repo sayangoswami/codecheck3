@@ -95,6 +95,52 @@ public class UploadController {
         }
     }
 
+    @DELETE
+    @jakarta.ws.rs.Path("/private/problem/{problem}/{editKey}")
+    @Produces(MediaType.TEXT_PLAIN)
+    public Response deleteProblem(@PathParam("problem") String problemID, @PathParam("editKey") String editKey) {
+        try {
+            uploadService.deleteProblem(problemID, editKey);
+            return Response.ok("Deleted problem " + problemID).build();
+        } catch (services.Upload.BadProblemIdException ex) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(ex.getMessage()).build();
+        } catch (SecurityException ex) {
+            return Response.status(Response.Status.FORBIDDEN).entity(ex.getMessage()).build();
+        } catch (java.io.IOException ex) {
+            return Response.status(Response.Status.NOT_FOUND).entity("No such problem: " + problemID).build();
+        } catch (Exception ex) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(Util.getStackTrace(ex)).build();
+        }
+    }
+
+    /**
+     * Batch problem delete, authorised by the server-wide admin password
+     * (header X-Admin-Password). Body is a plain-text list of problem ids,
+     * one per line; blank lines and '#' comments are ignored.
+     */
+    @POST
+    @jakarta.ws.rs.Path("/deleteProblems")
+    @Consumes(MediaType.TEXT_PLAIN)
+    @Produces(MediaType.TEXT_PLAIN)
+    public Response deleteProblems(@HeaderParam("X-Admin-Password") String adminPassword, String body) {
+        try {
+            java.util.List<String> ids = java.util.Arrays.asList(
+                    (body == null ? "" : body).split("\\R"));
+            Map<String, String> failures = uploadService.deleteProblems(adminPassword, ids);
+            int attempted = (int) ids.stream().map(String::strip)
+                    .filter(s -> !s.isEmpty() && !s.startsWith("#")).count();
+            StringBuilder sb = new StringBuilder();
+            sb.append("Deleted ").append(attempted - failures.size()).append(" of ").append(attempted).append(" problem(s).\n");
+            failures.forEach((id, reason) -> sb.append("FAILED ").append(id).append(": ").append(reason).append('\n'));
+            return Response.status(failures.isEmpty() ? 200 : 207) // 207 Multi-Status: some ids failed
+                    .entity(sb.toString()).build();
+        } catch (SecurityException ex) {
+            return Response.status(Response.Status.FORBIDDEN).entity(ex.getMessage()).build();
+        } catch (Exception ex) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(Util.getStackTrace(ex)).build();
+        }
+    }
+
     @POST
     @jakarta.ws.rs.Path("/codecheck")
     @Consumes(MediaType.APPLICATION_JSON)

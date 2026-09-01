@@ -160,6 +160,7 @@ None are required to get started.
 | `COM_HORSTMANN_CODECHECK_STORAGE_TYPE` | `local` | `sql` for Postgres (recommended for any real deployment), `aws` for S3 + DynamoDB (see `build-instructions.md` if you specifically want this — more setup, but it's what the original project documents most thoroughly), or leave unset for local-filesystem storage (only useful for testing on your own laptop). |
 | `COM_HORSTMANN_CODECHECK_COMRUN_REMOTE` | our shared `comrun-java` | Where to send code to compile/run. |
 | `COM_HORSTMANN_CODECHECK_JWT_SECRET_KEY` (or the dotted form, see Part C) | `changeme` | Must be overridden for any real deployment. |
+| `COM_HORSTMANN_CODECHECK_ADMIN_PASSWORD` | unset (feature disabled) | Enables `POST /deleteProblems` batch problem deletion, sent in the `X-Admin-Password` header. Single-problem delete (`DELETE /private/problem/{id}/{editKey}`) needs no admin password — it is authorised by that problem's own edit key. See `tools/delete_problems.py`. |
 
 ## Appendix: self-hosting with Docker Compose
 

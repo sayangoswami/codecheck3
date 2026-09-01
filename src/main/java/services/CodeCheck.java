@@ -127,6 +127,10 @@ public class CodeCheck {
         storeConn.writeProblem(problemZip, repo, problem);
     }
 
+    public void deleteProblem(String repo, String problem) throws IOException {
+        storeConn.deleteProblem(repo, problem);
+    }
+
     public String run(String reportType, String repo,
                       String problem, String ccid, Map<Path, String> submissionFiles)
             throws IOException, InterruptedException, NoSuchMethodException, ScriptException {
