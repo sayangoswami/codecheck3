@@ -19,6 +19,11 @@ Each problem's index.md is converted to index.html with the `markdown`
 library; every other file directly inside the problem directory is uploaded
 as-is.
 
+Each problem's public ID is derived from its directory name (slugified), so
+URLs are readable and stable across re-runs. The server rejects an upload
+whose ID already exists -- rename the directory or edit the existing problem
+via its edit URL.
+
 Server: pass --host, or set the CODECHECK_HOST environment variable.
 
 Dependencies: pip install -r requirements.txt (requests, markdown)
@@ -61,7 +66,12 @@ def find_title(markdown_text: str, fallback: str) -> str:
 def build_problem_zip(problem_dir: Path) -> tuple[bytes, str]:
     index_md = problem_dir / "index.md"
     md_text = index_md.read_text(encoding="utf-8")
-    html = markdown.markdown(md_text)
+    # fenced_code: render ``` ``` blocks as <pre><code> (without this the
+    # default parser only knows indented code blocks, so a fenced block with
+    # several output lines collapses into one <p><code> run-on line).
+    html = markdown.markdown(
+        md_text, extensions=["fenced_code", "tables", "sane_lists"]
+    )
     title = find_title(md_text, problem_dir.name)
 
     buf = io.BytesIO()
@@ -74,11 +84,28 @@ def build_problem_zip(problem_dir: Path) -> tuple[bytes, str]:
     return buf.getvalue(), title
 
 
-def upload_problem(host: str, zip_bytes: bytes) -> tuple[str, str]:
+def slugify(name: str) -> str:
+    # Derive a meaningful, stable public problem id from the directory name:
+    # lowercase, runs of non-alphanumerics collapsed to '-', trimmed. Must
+    # match the server's accepted id shape (starts alnum, a-z0-9._- , <=64).
+    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-.")
+    slug = slug[:64].rstrip("-.")
+    if not slug or not slug[0].isalnum():
+        raise SystemExit(f"Cannot derive a valid problem id from directory name {name!r}")
+    return slug
+
+
+def upload_problem(host: str, zip_bytes: bytes, problem_id: str) -> tuple[str, str]:
     resp = requests.post(
         f"{host}/uploadProblem",
+        data={"id": problem_id},
         files={"file": ("problem.zip", zip_bytes, "application/zip")},
     )
+    if resp.status_code == 409:
+        raise SystemExit(
+            f"Server rejected problem id {problem_id!r}: {resp.text.strip()}\n"
+            "Rename the directory, or update the existing problem via its edit URL."
+        )
     raise_for_status_verbose(resp)
     html = resp.text
     public_match = re.search(r'Public URL \(for your students\):\s*<a href="([^"]+)"', html)
@@ -140,7 +167,8 @@ def main():
     for problem_dir in problem_dirs:
         print(f"Uploading {problem_dir}...", file=sys.stderr)
         zip_bytes, title = build_problem_zip(problem_dir)
-        public_url, edit_url = upload_problem(host, zip_bytes)
+        problem_id = slugify(problem_dir.name)
+        public_url, edit_url = upload_problem(host, zip_bytes, problem_id)
         results.append((title, public_url, edit_url))
 
     print()

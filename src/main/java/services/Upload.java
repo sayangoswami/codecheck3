@@ -83,11 +83,57 @@ public class Upload {
     	return checkAndSaveProblem(requestPrefix, problem, problemFiles, editKey);
     }
 
+    /** Thrown when a caller-supplied problem id is malformed or already taken. */
+    public static class BadProblemIdException extends Exception {
+        public BadProblemIdException(String message) { super(message); }
+    }
+
+    // A caller-chosen problem id: 1-64 chars, lowercase letters/digits/._-,
+    // must start with a letter or digit. Deliberately strict so it is always a
+    // safe single path segment for the storage backends.
+    private static final java.util.regex.Pattern PROBLEM_ID =
+            java.util.regex.Pattern.compile("[a-z0-9][a-z0-9._-]{0,63}");
+
+    private String sanitizeProblemId(String raw) throws BadProblemIdException {
+        String id = raw.trim().toLowerCase();
+        if (!PROBLEM_ID.matcher(id).matches() || id.contains("..")
+                || !Path.of(id).getFileName().toString().equals(id)) {
+            throw new BadProblemIdException("Invalid problem id \"" + raw
+                    + "\": use 1-64 characters of a-z, 0-9, '.', '_' or '-', starting with a letter or digit.");
+        }
+        return id;
+    }
+
+    private boolean problemExists(String id) {
+        try {
+            return !codeCheck.loadProblem(DEFAULT_REPO, id).isEmpty();
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    /**
+     * Saves a brand-new problem under a caller-chosen id (slug). Rejects the
+     * upload if the id is malformed or already in use -- updating an existing
+     * problem still requires its edit key via the /editedProblem route.
+     */
+    public String checkAndSaveNamedProblem(String requestPrefix, String requestedId, byte[] problemZip)
+            throws IOException, InterruptedException, NoSuchMethodException, ScriptException, BadProblemIdException {
+        Map<Path, byte[]> problemFiles = fixZip(Util.unzip(problemZip));
+        String id = sanitizeProblemId(requestedId);
+        if (problemExists(id)) {
+            throw new BadProblemIdException("A problem with id \"" + id + "\" already exists. "
+                    + "Update it through its edit URL, or choose a different id.");
+        }
+        problemFiles.put(Path.of("edit.key"), Util.createPrivateUID().getBytes(StandardCharsets.UTF_8));
+        return saveProblemAndReport(requestPrefix, id, problemFiles);
+    }
+
     public String checkAndSaveProblem(String requestPrefix, String problem, Map<Path, byte[]> problemFiles, String editKey)
             throws IOException, InterruptedException, NoSuchMethodException, ScriptException {
     	if (problem == null) { // new problem
     		problem = Util.createPublicUID();
-    		editKey = Util.createPrivateUID();    		            
+    		editKey = Util.createPrivateUID();
     	} else {
     		checkEditKey(problem, editKey);
 
@@ -99,7 +145,15 @@ public class Upload {
                 }
             }
     	}
-    	problemFiles.put(Path.of("edit.key"), editKey.getBytes(StandardCharsets.UTF_8));    		
+    	problemFiles.put(Path.of("edit.key"), editKey.getBytes(StandardCharsets.UTF_8));
+    	return saveProblemAndReport(requestPrefix, problem, problemFiles);
+    }
+
+    // Persists problemFiles (which must already contain edit.key), then renders
+    // the "Public URL / Edit URL" confirmation page.
+    private String saveProblemAndReport(String requestPrefix, String problem, Map<Path, byte[]> problemFiles)
+            throws IOException, InterruptedException, NoSuchMethodException, ScriptException {
+        String editKey = new String(problemFiles.get(Path.of("edit.key")), StandardCharsets.UTF_8);
         StringBuilder response = new StringBuilder();
         String report = null;
         if (problemFiles.containsKey(Path.of("tracer.js"))) {

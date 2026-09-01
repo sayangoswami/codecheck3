@@ -53,8 +53,19 @@ public class UploadController {
     @jakarta.ws.rs.Path("/uploadProblem")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.TEXT_HTML)
-    public Response uploadProblem(@FormParam("file") InputStream part) {
-        return uploadProblem(null, null, part);
+    public Response uploadProblem(@FormParam("file") InputStream part, @FormParam("id") String id) {
+        if (id == null || id.isBlank()) {
+            return uploadProblem(null, null, part);
+        }
+        try {
+            byte[] problemZip = part.readAllBytes();
+            String response = uploadService.checkAndSaveNamedProblem(HttpUtil.prefix(uriInfo, headers), id, problemZip);
+            return Response.ok(response).type(MediaType.TEXT_HTML).build();
+        } catch (services.Upload.BadProblemIdException ex) {
+            return Response.status(Response.Status.CONFLICT).entity(ex.getMessage()).build();
+        } catch (Exception ex) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(Util.getStackTrace(ex)).build();
+        }
     }
 
     @POST

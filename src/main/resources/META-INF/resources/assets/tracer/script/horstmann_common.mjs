@@ -772,7 +772,10 @@ horstmann_common.uiInit = function(element, startAction, config) {
         let scaleFactor = horstmann_common.getScaleFactor()
         inputField.style.left = ((targetRect.left - outerRect.left) / scaleFactor) + 'px'
         inputField.style.top = ((targetRect.top - outerRect.top + (targetRect.height - inputRect.height) / 2) / scaleFactor) + 'px'
-        const minWidth = 1.5 * inputRect.height
+        // Floor the field at ~16 characters so a student typing a line of
+        // console output (over an initially-empty target span) isn't cramped
+        // into a one-character-wide box.
+        const minWidth = Math.max(1.5 * inputRect.height, 16 * inputRect.height * 0.6)
         inputField.style.width = (Math.max(minWidth, targetRect.width) / scaleFactor) + 'px'
       }
       placeOver()

@@ -555,7 +555,7 @@ export class Terminal {
     return this
   }
 
-  ask(line) {
+  ask(line, prompt, secondary) {
     const span = document.createElement('span')
     span.textContent = ''
     this.$element.appendChild(span)
@@ -567,7 +567,8 @@ export class Terminal {
       element: span,
       select: false,
       value: line,
-      prompt: 'Enter the next output',
+      prompt: prompt ?? 'Enter the next output',
+      secondary,
       done: (inputText) => {
         span.blur()
         span.textContent = line ?? inputText
@@ -1955,8 +1956,8 @@ window.addEventListener('load', () => {
           stepCompleted(false)
           return
         } else {
-          commonUI.instruction(null, {
-            secondary: _('od_enter_value')
+          commonUI.instruction(currentStep.prompt || null, {
+            secondary: currentStep.secondary || _('od_enter_value')
           })
         }
       }
