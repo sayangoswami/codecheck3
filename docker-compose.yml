@@ -43,6 +43,10 @@ services:
       # non-root `javauser` the image runs as (Dockerfile.jvm), so point it
       # at the bind-mounted volume above instead.
       COM_HORSTMANN_CODECHECK_STORAGE_LOCAL: /data/codecheck/repo
+      # Enables POST /deleteProblems batch delete (X-Admin-Password header).
+      # Value comes from the gitignored .env file next to this compose file;
+      # leave it empty there to disable the feature.
+      COM_HORSTMANN_CODECHECK_ADMIN_PASSWORD: ${COM_HORSTMANN_CODECHECK_ADMIN_PASSWORD:-}
     depends_on:
       - comrun-java
     restart: unless-stopped
