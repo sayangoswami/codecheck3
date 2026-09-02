@@ -36,6 +36,20 @@
             "CRSV" 1,
             "MONO" 0;
 }
+:root {
+  /* Core colors */
+  --bg-color: #ffffff;
+  --text-color: #000000;
+  --heading-color: #007a78;
+  --link-color: #003b49;
+  --link-hover: #8b7c69;
+  --primary-accent: #1d4289;   /* Bold */
+  --secondary-accent: #d3273e; /* Italic/Bullets */
+
+  /* Breathing room so content doesn't hug the window edge */
+  --page-padding: 1.5em;
+}
+
 .pseudo {
   font-family: "Cursive";
 }
@@ -72,10 +86,38 @@
 
 body {
   font-family: "Atkinson Hyperlegible Next", sans-serif;
+  color: var(--text-color);
+  background-color: var(--bg-color);
+  padding: var(--page-padding);
+  box-sizing: border-box;
 }
 
 code, pre {
   font-family: Mono;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--heading-color);
+}
+
+a {
+  color: var(--link-color);
+}
+
+a:hover {
+  color: var(--link-hover);
+}
+
+strong, b {
+  color: var(--primary-accent);
+}
+
+em, i {
+  color: var(--secondary-accent);
+}
+
+li::marker {
+  color: var(--secondary-accent);
 }
 
 .editor {
