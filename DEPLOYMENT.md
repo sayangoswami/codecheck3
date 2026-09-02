@@ -159,8 +159,77 @@ None are required to get started.
 |---|---|---|
 | `COM_HORSTMANN_CODECHECK_STORAGE_TYPE` | `local` | `sql` for Postgres (recommended for any real deployment), `aws` for S3 + DynamoDB (see `build-instructions.md` if you specifically want this — more setup, but it's what the original project documents most thoroughly), or leave unset for local-filesystem storage (only useful for testing on your own laptop). |
 | `COM_HORSTMANN_CODECHECK_COMRUN_REMOTE` | our shared `comrun-java` | Where to send code to compile/run. |
+| `COM_HORSTMANN_CODECHECK_QID_PATTERNS` | unset (bare ids rejected) | Comma-separated `printf` patterns (`%s` = problem id) for resolving assignment problems given by bare id instead of full URL. Must be the public origin, e.g. `https://codecheck.example.com/files/%s` — the resolved URL is loaded as an iframe `src` in the student's browser. |
 | `COM_HORSTMANN_CODECHECK_JWT_SECRET_KEY` (or the dotted form, see Part C) | `changeme` | Must be overridden for any real deployment. |
-| `COM_HORSTMANN_CODECHECK_ADMIN_PASSWORD` | unset (feature disabled) | Enables `POST /deleteProblems` batch problem deletion, sent in the `X-Admin-Password` header. Single-problem delete (`DELETE /private/problem/{id}/{editKey}`) needs no admin password — it is authorised by that problem's own edit key. See `tools/delete_problems.py`. |
+| `COM_HORSTMANN_CODECHECK_ADMIN_PASSWORD` | unset (feature disabled) | Enables the `POST /deleteProblems` batch problem delete — see "Deleting problems and assignments" below. |
+
+## Deleting problems and assignments
+
+There is no delete button in the web UI. Deletion is done over HTTP, and in
+every case you must present a secret you already hold — either the **edit key**
+that was printed when the item was created, or (for the batch problem endpoint)
+the server-wide **admin password**. Helper scripts live in `tools/`
+(`pip install -r tools/requirements.txt`; set `CODECHECK_HOST` to your server's
+base URL).
+
+### One problem
+
+```
+DELETE /private/problem/{problemID}/{editKey}
+```
+
+Authorised by that problem's own edit key — the key in the edit URL
+`.../private/problem/<id>/<editKey>` that `tools/upload_problems.py` records.
+No admin password needed.
+
+```bash
+# pairs.txt: one "<problemID> <editKey>" per line
+CODECHECK_HOST=https://codecheck.example.com tools/delete_problems.py pairs.txt
+```
+
+### Many problems at once (admin password)
+
+```
+POST /deleteProblems
+X-Admin-Password: <secret>
+body: one problem id per line   (blank lines and '#' comments ignored)
+```
+
+Requires `COM_HORSTMANN_CODECHECK_ADMIN_PASSWORD` to be set on the server;
+unset = the endpoint is disabled. Use this when you don't have the individual
+edit keys. Response is `200` if all ids were deleted, `207` if some failed
+(each failure is listed), `403` on a bad/absent password.
+
+```bash
+# ids.txt: one problem id per line
+CODECHECK_HOST=https://codecheck.example.com \
+CODECHECK_ADMIN_PASSWORD=… \
+  tools/delete_problems.py ids.txt
+```
+
+### One assignment
+
+```
+DELETE /private/assignment/{assignmentID}/{editKey}
+```
+
+Authorised by the assignment's (non-LTI) edit key — the key in the private
+assignment URL `.../private/assignment/<assignmentID>/<editKey>` shown to the
+instructor when the assignment is created. Returns `200` on success, `403` on
+a bad key, `404` if no such assignment exists.
+
+This removes only the assignment definition; any student work, submissions and
+comments already stored for it are left in place (harmless, but if you want a
+clean sweep, delete the matching `CodeCheckWork` / `CodeCheckSubmissions` /
+`CodeCheckComments` rows too — for local storage those are directories under
+the storage root).
+
+There is no batch/admin variant for assignments.
+
+```bash
+# pairs.txt: one "<assignmentID> <editKey>" per line
+CODECHECK_HOST=https://codecheck.example.com tools/delete_assignments.py pairs.txt
+```
 
 ## Appendix: self-hosting with Docker Compose
 

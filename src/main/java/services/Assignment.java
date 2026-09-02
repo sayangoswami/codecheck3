@@ -419,8 +419,22 @@ public class Assignment {
         return (ObjectNode) params;
     }
 
+    /**
+     * Deletes an assignment, authorised by its (non-LTI) edit key. Student work,
+     * submissions and comments for the assignment are left in storage.
+     */
+    public void deleteAssignment(String assignmentID, String editKey) throws IOException {
+        ObjectNode assignmentNode = storageConn.readAssignment(assignmentID);
+        if (assignmentNode == null)
+            throw new ServiceException("Assignment not found");
+        if (!editKeyValid(editKey, assignmentNode))
+            throw new SecurityException("Edit key does not match");
+        storageConn.deleteAssignment(assignmentID);
+    }
+
     public String qidURL(String qid) {
         String patterns = config.getString("com.horstmann.codecheck.qid.patterns");
+        if (patterns == null) return null;
         if (qid.matches("[a-zA-Z0-9_]+(-[a-zA-Z0-9_]+)*")) {
             for (String pattern : patterns.split(",")) {
                 String problemURL = pattern.formatted(qid);

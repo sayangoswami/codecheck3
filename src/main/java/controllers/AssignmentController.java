@@ -201,6 +201,23 @@ public class AssignmentController {
         }
     }
 
+    @DELETE
+    @jakarta.ws.rs.Path("/private/assignment/{assignmentID}/{editKey}")
+    @Produces(MediaType.TEXT_PLAIN)
+    public Response instructorDeletesAssignment(@PathParam("assignmentID") String assignmentID,
+                                               @PathParam("editKey") String editKey) {
+        try {
+            assignmentService.deleteAssignment(assignmentID, editKey);
+            return Response.ok("Deleted assignment " + assignmentID).build();
+        } catch (ServiceException ex) {
+            return Response.status(Response.Status.NOT_FOUND).entity(ex.getMessage()).build();
+        } catch (SecurityException ex) {
+            return Response.status(Response.Status.FORBIDDEN).entity(ex.getMessage()).build();
+        } catch (IOException ex) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(ex.getMessage()).build();
+        }
+    }
+
     @POST
     @jakarta.ws.rs.Path("/saveAssignment")
     @Consumes(MediaType.APPLICATION_JSON)

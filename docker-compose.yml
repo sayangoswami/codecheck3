@@ -47,6 +47,11 @@ services:
       # Value comes from the gitignored .env file next to this compose file;
       # leave it empty there to disable the feature.
       COM_HORSTMANN_CODECHECK_ADMIN_PASSWORD: ${COM_HORSTMANN_CODECHECK_ADMIN_PASSWORD:-}
+      # Lets assignments reference uploaded problems by bare id (qid) instead of
+      # a full URL. Comma-separated printf patterns; %s is the problem id. The
+      # first pattern whose URL returns 200 wins. Must be the PUBLIC origin: the
+      # resulting URL is loaded as an iframe src in the student's browser.
+      COM_HORSTMANN_CODECHECK_QID_PATTERNS: https://codecheck.sayangoswami.dev/files/%s
     depends_on:
       - comrun-java
     restart: unless-stopped

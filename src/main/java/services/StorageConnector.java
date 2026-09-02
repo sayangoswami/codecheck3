@@ -188,6 +188,10 @@ public class StorageConnector {
         delegate.writeAssignment(node);
     }
 
+    public void deleteAssignment(String assignmentID) throws IOException {
+        delegate.deleteAssignment(assignmentID);
+    }
+
     public void writeSubmission(JsonNode node) throws IOException {
         delegate.writeSubmission(node);
     }
@@ -214,6 +218,7 @@ interface StorageConnection {
     ObjectNode readNewestSubmission(String submissionID) throws IOException;
     Map<String, ObjectNode> readAllWork(String assignmentID) throws IOException;
     void writeAssignment(JsonNode node) throws IOException;
+    void deleteAssignment(String assignmentID) throws IOException;
     void writeSubmission(JsonNode node) throws IOException;
     void writeComment(JsonNode node)  throws IOException;
     boolean writeWork(JsonNode node) throws IOException; // return true if this version was saved (because it was newer)
@@ -425,6 +430,15 @@ class AWSStorageConnection implements StorageConnection {
 
     public void writeAssignment(JsonNode node) {
         writeJsonObjectToDB("CodeCheckAssignments", node);
+    }
+
+    public void deleteAssignment(String assignmentID) {
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("assignmentID", AttributeValue.builder().s(assignmentID).build());
+        dynamoDbClient.deleteItem(DeleteItemRequest.builder()
+                .tableName("CodeCheckAssignments")
+                .key(key)
+                .build());
     }
 
     public void writeSubmission(JsonNode node) {
@@ -747,6 +761,15 @@ class LocalStorageConnection implements StorageConnection {
         Files.writeString(path, node.toString());
     }
 
+    public void deleteAssignment(String assignmentID) throws IOException {
+        try {
+            Files.deleteIfExists(path("CodeCheckAssignments", assignmentID));
+        } catch (IOException ex) {
+            logger.log(Logger.Level.ERROR, "AssignmentLocalConnection.delete : Cannot delete " + assignmentID);
+            throw ex;
+        }
+    }
+
     public void writeSubmission(JsonNode node) throws IOException {
         String submissionID = node.get("submissionID").asText();
         String submittedAt = node.get("submittedAt").asText();
@@ -1007,6 +1030,17 @@ DO UPDATE SET json = EXCLUDED.json
                 ps.setString(2, node.toString());
                 ps.executeUpdate();
             }
+        } catch (SQLException ex) {
+            logger.log(Logger.Level.ERROR, ex.getMessage());
+            throw new IOException(ex);
+        }
+    }
+
+    public void deleteAssignment(String assignmentID) throws IOException {
+        try (Connection conn = config.getDatabaseConnection()) {
+            PreparedStatement ps = conn.prepareStatement("DELETE FROM CodeCheckAssignments WHERE assignmentID = ?");
+            ps.setString(1, assignmentID);
+            ps.executeUpdate();
         } catch (SQLException ex) {
             logger.log(Logger.Level.ERROR, ex.getMessage());
             throw new IOException(ex);
