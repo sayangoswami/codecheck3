@@ -431,6 +431,18 @@ this stack. `podman compose` shells out to `docker-compose`, which rewrites the 
 `nvidia.com/gpu=all` into a `src:dst:rwm` triple that podman can't resolve; `podman-compose`
 passes it straight through to `podman run --device`.
 
+The webapp container writes to the bind-mounted `codecheck-gpu-data/` as `javauser` (uid 100
+inside the container), which under rootless podman's user namespace is neither the owning
+`sayan`/root pair nor a group member — so the directory must be world-writable, same as
+`codecheck-data/` for the main stack:
+
+```bash
+mkdir -p codecheck-gpu-data && chmod 777 codecheck-gpu-data
+```
+
+Skipping this makes problem uploads silently fail (`Cannot create /data/codecheck/repo` in the
+webapp log, but the upload page just does nothing).
+
 ```bash
 cd ~/Repos/codecheck3
 podman-compose -f docker-compose.gpu.yml up -d --build
