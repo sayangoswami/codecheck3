@@ -25,9 +25,10 @@ services:
     environment:
       # One class submitting at once must not spawn dozens of CUDA contexts.
       # Each in-flight job ≈ one python process ≈ one CUDA context
-      # (~300-600 MB VRAM before any data). Card has ~20 GB, so ~3-6 is safe.
+      # (~300-600 MB VRAM before any data). Card has ~20 GB, so ~3-6 is safe,
+      # but serialized to 1 to keep execution fully sequential.
       # queue-wait + job-run must stay under the webapp's 90s HTTP timeout.
-      COMRUN_MAX_CONCURRENCY: "3"
+      COMRUN_MAX_CONCURRENCY: "1"
       COMRUN_MAX_QUEUE: "30"
       COMRUN_QUEUE_TIMEOUT_MS: "45000"
       COMRUN_JOB_TIMEOUT_MS: "75000"
