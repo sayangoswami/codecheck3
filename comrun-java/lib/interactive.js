@@ -75,6 +75,11 @@ function runInteractive(tmpDir, className, stdinText, timeoutMs) {
       finish(1);
     }, timeoutMs);
 
+    const scheduleNext = (delay) => {
+      clearTimeout(timer);
+      if (li < lines.length) timer = setTimeout(writeNext, delay);
+    };
+
     const writeNext = () => {
       if (li >= lines.length) {
         proc.stdin.end();
@@ -84,6 +89,10 @@ function runInteractive(tmpDir, className, stdinText, timeoutMs) {
       const line = lines[li++];
       segments.push({ type: 'stdin', text: line + '\n' });
       proc.stdin.write(line + '\n');
+      // Fallback: keep feeding even if the program consumes input without
+      // producing output (e.g. IO.readln() with no prompt). The stdout
+      // handler below feeds sooner when the program does print a prompt.
+      scheduleNext(500);
     };
 
     proc.stdout.on('data', (chunk) => {
@@ -91,8 +100,7 @@ function runInteractive(tmpDir, className, stdinText, timeoutMs) {
       if (segments.length && segments[segments.length - 1].type === 'stdout')
         segments[segments.length - 1].text += text;
       else segments.push({ type: 'stdout', text });
-      clearTimeout(timer);
-      if (li < lines.length) timer = setTimeout(writeNext, 50);
+      scheduleNext(50);
     });
     proc.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
