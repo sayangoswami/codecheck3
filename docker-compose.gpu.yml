@@ -57,6 +57,10 @@ services:
     environment:
       COM_HORSTMANN_CODECHECK_COMRUN_REMOTE: http://comrun-gpu:8080/api/upload
       COM_HORSTMANN_CODECHECK_STORAGE_LOCAL: /data/codecheck/repo
+      # Needed to resolve bare problem ids (qids) in assignments to URLs.
+      # Must be this instance's own PUBLIC origin: the resolved URL is loaded
+      # as an iframe src in the student's browser.
+      COM_HORSTMANN_CODECHECK_QID_PATTERNS: https://gpu-codecheck.sayangoswami.dev/files/%s
       # If the main instance sets a JWT secret / other prod config, mirror the
       # ones you need here (kept out of git in application-prod.properties).
     depends_on:
