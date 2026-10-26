@@ -61,6 +61,7 @@ public class Assignment {
             if (editKey == null) { // Clone
                 assignmentNode.remove("editKey");
                 assignmentNode.remove("assignmentID");
+                assignmentNode.remove("extensions");
             }
             else { // Edit existing assignment
                 if (!editKeyValid(editKey, assignmentNode)) 
@@ -105,6 +106,10 @@ public class Assignment {
     <p id="deadlineLocal" style="font-weight: bold;"></p>
     <p id="deadlineUTC" style="font-weight: bold;"></p>
     <p>Leave a date blank for no deadline of that kind.</p>
+    <h3>Deadline extensions</h3>
+    <p>A student with an extension gets their own deadline (<b>Local Time</b>) instead of both deadlines above. Leave the date blank for no deadline at all.</p>
+    <div id="extensions"></div>
+    <div id="addExtensionDiv"></div>
  </div>
  <div id='saveButtonDiv'></div>
  <div id="response" class="message" style='display: none'></div>
@@ -145,6 +150,10 @@ public class Assignment {
             }
         }
         assignmentNode.remove("editKey");
+        assignmentNode = withExtension(assignmentNode, ccid);
+        // Roster IDs are also the students' keys to their work, and extensions name students
+        assignmentNode.remove("roster");
+        assignmentNode.remove("extensions");
         ArrayNode groups = (ArrayNode) assignmentNode.get("problems");
         assignmentNode.set("problems", groups.get(Math.abs(workID.hashCode()) % groups.size()));
         
@@ -356,13 +365,15 @@ public class Assignment {
             String submissionEditKey = parts[1];
             
             ObjectNode work = itemMap.get(submissionKey);
+            ObjectNode studentAssignmentNode = withExtension(assignmentNode, ccid);
             ObjectNode submissionData = JsonNodeFactory.instance.objectNode();
             submissionData.put("opaqueID", ccid);
-            submissionData.put("score", bestScore(assignmentNode, submissionKey, work));
+            submissionData.put("score", bestScore(studentAssignmentNode, submissionKey, work));
             submissionData.set("submittedAt", work.get("submittedAt"));
             submissionData.put("viewURL", "/private/submission/" + assignmentID + "/" + ccid + "/" + submissionEditKey); 
             submissionData.put("historyURL", "/private/submissionHistory/" + assignmentID + "/" + editKey + "/" + ccid);
-            submissionData.put("late", isLate(assignmentNode, work.get("submittedAt")));
+            submissionData.put("late", isLate(studentAssignmentNode, work.get("submittedAt")));
+            submissionData.put("extension", studentAssignmentNode.has("hasExtension"));
             submissions.add(submissionData);            
         }
         String allSubmissionsURL = "/lti/allSubmissions?resourceID=" + URLEncoder.encode(assignmentID, "UTF-8");
@@ -405,6 +416,7 @@ public class Assignment {
         for (String key : storageConn.readAllWork(assignmentID).keySet())
             if (key.startsWith(ccid + "/")) workID = key;
         if (workID == null) throw new ServiceException("No work found for " + ccid);
+        assignmentNode = withExtension(assignmentNode, ccid);
 
         ArrayNode groups = (ArrayNode) assignmentNode.get("problems");
         ArrayNode problems = (ArrayNode) groups.get(Math.abs(workID.hashCode()) % groups.size());
@@ -428,6 +440,7 @@ public class Assignment {
         data.put("score", weightedScore(problems, bestScores));
         if (assignmentNode.has("softDeadline")) data.set("softDeadline", assignmentNode.get("softDeadline"));
         if (assignmentNode.has("deadline")) data.set("deadline", assignmentNode.get("deadline"));
+        data.put("extension", assignmentNode.has("hasExtension"));
         data.set("problems", history);
         return submissionHistoryHTML.formatted(scriptSafe(data.toString()));
     }
@@ -464,6 +477,7 @@ public class Assignment {
         checkDeadlines(params);
         if (params.has("roster"))
             ((ObjectNode) params).set("roster", parseRoster(params.get("roster").asText()));
+        checkExtensions(params);
         String assignmentID;
         String editKey;
         ObjectNode assignmentNode;
@@ -689,6 +703,44 @@ public class Assignment {
             throw new ServiceException("The soft deadline must not be after the hard deadline");
     }
 
+    /*
+     * The assignment as it applies to one student. extensions maps student IDs to their own
+     * deadline (an ISO 8601 string, or null for no deadline), which replaces both the soft and
+     * the hard deadline. The result has hasExtension set if the student has an extension.
+     */
+    private static ObjectNode withExtension(ObjectNode assignmentNode, String ccid) {
+        JsonNode extensions = assignmentNode.get("extensions");
+        if (ccid == null || extensions == null || !extensions.has(ccid)) return assignmentNode;
+        ObjectNode result = assignmentNode.deepCopy();
+        result.remove("softDeadline");
+        result.remove("deadline");
+        if (!extensions.get(ccid).isNull()) result.set("deadline", extensions.get(ccid));
+        result.put("hasExtension", true);
+        return result;
+    }
+
+    private static void checkExtensions(JsonNode params) {
+        if (!params.has("extensions")) return;
+        JsonNode extensions = params.get("extensions");
+        if (!extensions.isObject()) throw new ServiceException("Invalid extensions");
+        JsonNode roster = params.get("roster");
+        for (String ccid : Util.iterable(extensions.fieldNames())) {
+            if (ccid.isBlank()) throw new ServiceException("An extension is missing its student ID");
+            if (roster != null && !roster.isEmpty()) {
+                boolean found = false;
+                for (JsonNode id : roster) if (id.asText().equals(ccid)) found = true;
+                if (!found) throw new ServiceException("Extension for " + ccid + ", who is not on the roster");
+            }
+            JsonNode deadline = extensions.get(ccid);
+            if (deadline.isNull()) continue;
+            try {
+                Instant.parse(deadline.asText());
+            } catch (java.time.format.DateTimeParseException ex) {
+                throw new ServiceException("Invalid extension deadline for " + ccid);
+            }
+        }
+    }
+
     public static boolean isLate(JsonNode assignmentNode, JsonNode submittedAt) {
         if (submittedAt == null || !assignmentNode.has("softDeadline")) return false;
         return Instant.parse(submittedAt.asText()).isAfter(Instant.parse(assignmentNode.get("softDeadline").asText()));
@@ -716,6 +768,7 @@ public class Assignment {
         ObjectNode assignmentNode = storageConn.readAssignment(assignmentID);
         if (assignmentNode == null) throw new ServiceException("Assignment not found");
         String workID = requestNode.get("workID").asText();
+        assignmentNode = withExtension(assignmentNode, workID.split("/")[0]);
         String problemID = requestNode.get("tab").asText();
         ObjectNode problemNode = (ObjectNode) requestNode.get("problems").get(problemID);
 

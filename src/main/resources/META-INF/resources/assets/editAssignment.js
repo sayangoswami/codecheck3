@@ -42,6 +42,41 @@ window.addEventListener('DOMContentLoaded', () => {
   for (const prefix of ['deadline', 'softDeadline'])
     document.getElementById(prefix + 'Date').addEventListener('input', () => showDeadline(prefix))
 
+  // Each extension row: student ID, that student's deadline, and its local time
+  const extensionsDiv = document.getElementById('extensions')
+  function addExtensionRow(ccid, deadline) {
+    const row = append(extensionsDiv, 'div')
+    row.className = 'extension-row'
+    const idInput = append(row, 'input')
+    idInput.type = 'text'
+    idInput.placeholder = 'Student ID'
+    idInput.className = 'extension-id'
+    idInput.value = ccid ?? ''
+    const dateInput = append(row, 'input')
+    dateInput.type = 'datetime-local'
+    dateInput.className = 'extension-date'
+    if (deadline) dateInput.value = toLocalInputValue(deadline)
+    const shown = append(row, 'span')
+    shown.className = 'extension-shown'
+    const show = () => shown.textContent = dateInput.value === '' ? 'no deadline' : new Date(dateInput.value).toString()
+    dateInput.addEventListener('input', show)
+    show()
+    row.appendChild(createButton('hc-command', 'Remove', () => row.remove()))
+  }
+
+  function readExtensions() {
+    const extensions = {}
+    for (const row of extensionsDiv.querySelectorAll('.extension-row')) {
+      const ccid = row.querySelector('.extension-id').value.trim()
+      const date = row.querySelector('.extension-date').value
+      if (ccid === '' && date === '') continue
+      if (ccid === '') throw new Error('An extension is missing its student ID')
+      if (ccid in extensions) throw new Error('More than one extension for ' + ccid)
+      extensions[ccid] = date === '' ? null : new Date(date).toISOString()
+    }
+    return extensions
+  }
+
   const responseDiv = document.getElementById('response')
   if ('problems' in assignment)
     document.getElementById('problems').value = format(assignment.problems)
@@ -54,6 +89,9 @@ window.addEventListener('DOMContentLoaded', () => {
         showDeadline(prefix)
       }
     }
+    for (const ccid in assignment.extensions ?? {})
+      addExtensionRow(ccid, assignment.extensions[ccid])
+    document.getElementById('addExtensionDiv').appendChild(createButton('hc-command', 'Add extension', () => addExtensionRow()))
   } else {  
     const deadlineDiv = document.getElementById('deadlineDiv')
     deadlineDiv.style.display = 'none'
@@ -74,6 +112,14 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       if (request.softDeadline !== undefined && request.deadline !== undefined && request.softDeadline > request.deadline) {
         responseDiv.textContent = 'The soft deadline must not be after the hard deadline'
+        responseDiv.style.display = 'block'
+        return
+      }
+      try {
+        const extensions = readExtensions()
+        if (Object.keys(extensions).length > 0) request.extensions = extensions
+      } catch (e) {
+        responseDiv.textContent = e.message
         responseDiv.style.display = 'block'
         return
       }

@@ -81,10 +81,12 @@ window.addEventListener('DOMContentLoaded', () => {
   append(body, 'p', 'Score (best attempt on each problem): ' + percent(historyData.score)).style.fontWeight = 'bold'
   const softDeadline = historyData.softDeadline === undefined ? undefined : new Date(historyData.softDeadline)
   const deadline = historyData.deadline === undefined ? undefined : new Date(historyData.deadline)
+  if (historyData.extension)
+    append(body, 'p', 'This student has a deadline extension' + (deadline === undefined ? ' with no deadline.' : '.')).classList.add('history-label')
   if (softDeadline !== undefined)
     append(body, 'p', 'Soft deadline: ' + softDeadline.toLocaleString())
   if (deadline !== undefined)
-    append(body, 'p', (softDeadline === undefined ? 'Deadline: ' : 'Hard deadline: ') + deadline.toLocaleString())
+    append(body, 'p', (historyData.extension ? 'Extended deadline: ' : softDeadline === undefined ? 'Deadline: ' : 'Hard deadline: ') + deadline.toLocaleString())
 
   for (const problem of historyData.problems) {
     append(body, 'h2', problem.problemID)

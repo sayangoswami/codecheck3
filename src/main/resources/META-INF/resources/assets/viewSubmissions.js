@@ -238,7 +238,7 @@ window.addEventListener('DOMContentLoaded', () => {
         text: 'Submitted At',
         href: 'javascript:sort_table(3,"D", "mdyhtsp");',
       },
-      { text: 'Late', href: 'javascript:sort_table(4,"T");' },
+      { text: 'Status', href: 'javascript:sort_table(4,"T");' },
       { text: 'History' },
     ];
 
@@ -279,6 +279,8 @@ window.addEventListener('DOMContentLoaded', () => {
       if (submission.late) {
         tr.classList.add('late');
         append(tr, 'td', 'Late').classList.add('late-label');
+      } else if (submission.extension) {
+        append(tr, 'td', 'Extension').classList.add('history-label');
       } else {
         append(tr, 'td', '');
       }

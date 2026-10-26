@@ -399,3 +399,16 @@ tr.closed td {
   background: transparent;
   white-space: pre;
 }
+
+.extension-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.extension-shown {
+  font-size: 0.9em;
+  color: #555;
+}
