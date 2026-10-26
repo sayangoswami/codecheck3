@@ -19,6 +19,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const body = document.querySelector('body')
   append(body, 'h1', 'Submission History')
   append(body, 'p', 'Student: ' + historyData.ccid)
+  append(body, 'p', 'Score (best attempt on each problem): ' + percent(historyData.score)).style.fontWeight = 'bold'
   const softDeadline = historyData.softDeadline === undefined ? undefined : new Date(historyData.softDeadline)
   const deadline = historyData.deadline === undefined ? undefined : new Date(historyData.deadline)
   if (softDeadline !== undefined)
@@ -28,6 +29,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   for (const problem of historyData.problems) {
     append(body, 'h2', problem.problemID)
+    append(body, 'p', 'Best: ' + percent(problem.best))
     if (problem.submissions.length === 0) {
       append(body, 'p', 'No submissions')
       continue

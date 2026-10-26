@@ -41,7 +41,8 @@ window.addEventListener('DOMContentLoaded', () => {
         // really want let score = work.problems[problemKey(p)].score
         for (const key in work.problems) {
           if (isProblemKeyFor(key, p)) { 
-            let score = work.problems[key].score
+            // The best attempt counts, not the latest
+            let score = Math.max(work.problems[key].score, bestScore(p))
             updateScoreInProblemSelector(i, score)
             result += p.weight * score
             if (explanation !== '') explanation += ' + '
@@ -58,6 +59,11 @@ window.addEventListener('DOMContentLoaded', () => {
     updateScoreInElementText(document.getElementById('heading'), result, explanation)    
   }
   
+  function bestScore(problem) {
+    if (assignment.bestScores === undefined) return 0
+    return assignment.bestScores[problemKey(problem)] ?? 0
+  }
+
   function adjustDocHeight(iframe, newHeight) {
     // console.log({frame: iframeKey.get(iframe), oldHeight: iframe.scrollHeight, newHeight })
     /*
@@ -110,6 +116,8 @@ window.addEventListener('DOMContentLoaded', () => {
     let key = iframeKey.get(iframe)  
     // Don't want qid which is also in request.param
     work.problems[key] = { score, state }
+    if (assignment.bestScores !== undefined)
+      assignment.bestScores[key] = Math.max(assignment.bestScores[key] ?? 0, score)
     updateScoreDisplay();     
     try {
       responseDiv.textContent = ''

@@ -25,6 +25,7 @@ import java.net.URLEncoder;
 import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -153,6 +154,11 @@ public class Assignment {
         if (!workID.equals(""))  {
             work = storageConn.readWorkString(assignmentID, workID);
             comment = storageConn.readComment(assignmentID, workID);
+        }
+        if (!workID.equals("")) {
+            ObjectNode workNode = work == null ? null : Util.fromJsonString(work);
+            ObjectNode bestScores = assignmentNode.putObject("bestScores");
+            bestScores(assignmentNode, (ArrayNode) assignmentNode.get("problems"), workID, workNode).forEach(bestScores::put);
         }
         if (work == null) 
             work = "{ assignmentID: \"" + assignmentID + "\", workID: \"" 
@@ -352,7 +358,7 @@ public class Assignment {
             ObjectNode work = itemMap.get(submissionKey);
             ObjectNode submissionData = JsonNodeFactory.instance.objectNode();
             submissionData.put("opaqueID", ccid);
-            submissionData.put("score", Assignment.score(assignmentNode, work));
+            submissionData.put("score", bestScore(assignmentNode, submissionKey, work));
             submissionData.set("submittedAt", work.get("submittedAt"));
             submissionData.put("viewURL", "/private/submission/" + assignmentID + "/" + ccid + "/" + submissionEditKey); 
             submissionData.put("historyURL", "/private/submissionHistory/" + assignmentID + "/" + editKey + "/" + ccid);
@@ -402,11 +408,13 @@ public class Assignment {
 
         ArrayNode groups = (ArrayNode) assignmentNode.get("problems");
         ArrayNode problems = (ArrayNode) groups.get(Math.abs(workID.hashCode()) % groups.size());
+        Map<String, Double> bestScores = bestScores(assignmentNode, problems, workID, storageConn.readWork(assignmentID, workID));
         ArrayNode history = JsonNodeFactory.instance.arrayNode();
         for (JsonNode problem : problems) {
-            String problemID = problem.has("qid") ? problem.get("qid").asText() : problem.get("URL").asText();
+            String problemID = problemKey(problem);
             ObjectNode problemData = history.addObject();
             problemData.put("problemID", problemID);
+            problemData.put("best", bestScores.get(problemID));
             ArrayNode submissions = problemData.putArray("submissions");
             for (ObjectNode submission : storageConn.readAllSubmissions(assignmentID + " " + workID + " " + problemID)) {
                 ObjectNode submissionData = submissions.addObject();
@@ -417,6 +425,7 @@ public class Assignment {
         }
         ObjectNode data = JsonNodeFactory.instance.objectNode();
         data.put("ccid", ccid);
+        data.put("score", weightedScore(problems, bestScores));
         if (assignmentNode.has("softDeadline")) data.set("softDeadline", assignmentNode.get("softDeadline"));
         if (assignmentNode.has("deadline")) data.set("deadline", assignmentNode.get("deadline"));
         data.set("problems", history);
@@ -592,6 +601,53 @@ public class Assignment {
         return problemURL.endsWith(key);
     }
              
+    private static String problemKey(JsonNode problem) {
+        return problem.has("qid") ? problem.get("qid").asText() : problem.get("URL").asText();
+    }
+
+    /*
+     * The best score for each problem (by problemKey) in the student's group: the maximum
+     * over all logged submissions up to the hard deadline and the saved work. Submissions
+     * after the hard deadline are only in the log from before it was enforced, and don't count.
+     */
+    private Map<String, Double> bestScores(ObjectNode assignmentNode, ArrayNode problems, String workID, ObjectNode work) throws IOException {
+        String assignmentID = assignmentNode.get("assignmentID").asText();
+        Instant deadline = assignmentNode.has("deadline") ? Instant.parse(assignmentNode.get("deadline").asText()) : null;
+        Map<String, Double> result = new HashMap<>();
+        for (JsonNode problem : problems) {
+            String key = problemKey(problem);
+            double best = 0;
+            for (ObjectNode submission : storageConn.readAllSubmissions(assignmentID + " " + workID + " " + key)) {
+                if (deadline == null || !Instant.parse(submission.get("submittedAt").asText()).isAfter(deadline))
+                    best = Math.max(best, submission.get("score").asDouble());
+            }
+            if (work != null && work.has("problems")) {
+                for (String workKey : Util.iterable(work.get("problems").fieldNames()))
+                    if (isProblemKeyFor(workKey, (ObjectNode) problem))
+                        best = Math.max(best, work.get("problems").get(workKey).path("score").asDouble());
+            }
+            result.put(key, best);
+        }
+        return result;
+    }
+
+    private static double weightedScore(ArrayNode problems, Map<String, Double> scores) {
+        double result = 0;
+        double sum = 0;
+        for (JsonNode problem : problems) {
+            double weight = problem.get("weight").asDouble();
+            sum += weight;
+            result += weight * scores.getOrDefault(problemKey(problem), 0.0);
+        }
+        return sum == 0 ? 0 : result / sum;
+    }
+
+    private double bestScore(ObjectNode assignmentNode, String workID, ObjectNode work) throws IOException {
+        ArrayNode groups = (ArrayNode) assignmentNode.get("problems");
+        ArrayNode problems = (ArrayNode) groups.get(Math.abs(workID.hashCode()) % groups.size());
+        return weightedScore(problems, bestScores(assignmentNode, problems, workID, work));
+    }
+
     public static double score(JsonNode assignment, ObjectNode work) {
         ArrayNode groups = (ArrayNode) assignment.get("problems");      
         String workID = work.get("workID").asText();
