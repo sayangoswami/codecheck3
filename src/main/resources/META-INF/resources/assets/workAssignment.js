@@ -77,15 +77,43 @@ window.addEventListener('DOMContentLoaded', () => {
     else return null // TODO: Why not undefined
   }
 
+  // The current time according to the server's clock
+  function serverNow() {
+    return new Date(Date.now() - assignment.receivedAt + Date.parse(assignment.sentAt))
+  }
+
+  function pastDeadline(name) {
+    return name in assignment && serverNow() > new Date(assignment[name])
+  }
+
+  function updateDeadlineStatus() {
+    const status = document.getElementById('deadlineStatus')
+    if (pastDeadline('deadline')) {
+      status.textContent = 'The deadline has passed. Your work is no longer saved.'
+      status.className = 'deadline-status closed'
+    } else if (pastDeadline('softDeadline')) {
+      status.textContent = 'The deadline has passed. Work you save now is marked late.'
+      status.className = 'deadline-status late'
+    } else {
+      status.textContent = ''
+      status.className = 'deadline-status'
+    }
+  }
+
   async function sendScoreAndState(iframe, score, state) {    
     if (!assignment.isStudent) return // Viewing as instructor
+    if (pastDeadline('deadline')) {
+      updateDeadlineStatus()
+      responseDiv.textContent = 'The deadline has passed. This work was not saved.'
+      return
+    }
     let key = iframeKey.get(iframe)  
     // Don't want qid which is also in request.param
     work.problems[key] = { score, state }
     updateScoreDisplay();     
     try {
       responseDiv.textContent = ''
-      work.submittedAt = new Date(Date.now() - assignment.receivedAt + Date.parse(assignment.sentAt)).toISOString()
+      work.submittedAt = serverNow().toISOString()
       if (lti !== undefined) {
         lti.work = work
         await postData("/lti/saveWork", lti)
@@ -252,14 +280,20 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   if (assignment.isStudent) {
-    if('deadline' in assignment){
-      document.getElementById('deadline').textContent = "Deadline:"
-      let deadline = assignment.deadline
-      let deadlineUTC = new Date(deadline).toUTCString()
-      let deadlineLocal = new Date(Date.parse(deadline))
-      document.getElementById('deadlineLocal').textContent = deadlineLocal
-      document.getElementById('deadlineUTC').textContent = deadlineUTC + " (UTC)"
+    const deadlinesDiv = document.getElementById('deadlines')
+    const deadlineLabels = 'softDeadline' in assignment
+      ? { softDeadline: 'Deadline (work saved later is marked late):', deadline: 'Final deadline (no work saved later):' }
+      : { deadline: 'Deadline:' }
+    for (const name in deadlineLabels) {
+      if (name in assignment) {
+        append(deadlinesDiv, 'p', deadlineLabels[name]).style.fontWeight = 'bold'
+        append(deadlinesDiv, 'p', new Date(assignment[name]).toString()).style.fontWeight = 'bold'
+        append(deadlinesDiv, 'p', new Date(assignment[name]).toUTCString() + ' (UTC)').style.fontWeight = 'bold'
+      }
     }
+    updateDeadlineStatus()
+    if ('deadline' in assignment || 'softDeadline' in assignment)
+      setInterval(updateDeadlineStatus, 30000)
     if (lti === undefined) {
       document.getElementById('studentLTIInstructions').style.display = 'none'
       const returnToWorkURLSpan = document.getElementById('returnToWorkURL') 

@@ -317,3 +317,48 @@ th.ascending a:after {
 th.descending a:after {
   content: ' ▽';
 }
+/* Soft/hard deadline banners (student view) and late rows (instructor views) */
+:root {
+  --late-color: #8a5a00;
+  --late-bg: #fff4d6;
+  --closed-color: #a3122a;
+  --closed-bg: #fde7ea;
+}
+
+.deadline-status:empty {
+  display: none;
+}
+
+.deadline-status.late, .deadline-status.closed {
+  font-weight: bold;
+  padding: 0.5em;
+  border-left: 4px solid currentColor;
+}
+
+.deadline-status.late {
+  color: var(--late-color);
+  background: var(--late-bg);
+}
+
+.deadline-status.closed {
+  color: var(--closed-color);
+  background: var(--closed-bg);
+}
+
+tr.late td {
+  background: var(--late-bg);
+}
+
+tr.closed td {
+  background: var(--closed-bg);
+}
+
+.late-label {
+  color: var(--late-color);
+  font-weight: bold;
+}
+
+.closed-label {
+  color: var(--closed-color);
+  font-weight: bold;
+}

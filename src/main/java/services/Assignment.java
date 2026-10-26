@@ -95,11 +95,15 @@ public class Assignment {
  <label style="display: block;" for="roster">Allowed CodeCheck IDs, one per line (leave blank to allow any ID a student types in):</label>
  <textarea style="display: block; width: 90%%;" id="roster" rows="10"></textarea>
  <div id="deadlineDiv">
-    <label style="display: block;" for="deadlineDate">Deadline (<b>Local Time</b>):</label>
+    <label style="display: block;" for="softDeadlineDate">Soft deadline (<b>Local Time</b>), work saved after it is marked late:</label>
+    <input type="datetime-local" id="softDeadlineDate" name="softDate"/>
+    <p id="softDeadlineLocal" style="font-weight: bold;"></p>
+    <p id="softDeadlineUTC" style="font-weight: bold;"></p>
+    <label style="display: block;" for="deadlineDate">Hard deadline (<b>Local Time</b>), no work is accepted after it:</label>
     <input type="datetime-local" id="deadlineDate" name="date"/>
     <p id="deadlineLocal" style="font-weight: bold;"></p>
     <p id="deadlineUTC" style="font-weight: bold;"></p>
-    <p>Leave date blank for no deadline.</p>
+    <p>Leave a date blank for no deadline of that kind.</p>
  </div>
  <div id='saveButtonDiv'></div>
  <div id="response" class="message" style='display: none'></div>
@@ -178,7 +182,7 @@ public class Assignment {
             }
         }
         String lti = "undefined";
-        return workAssignmentHTML.formatted(assignmentNode.toString(), work, ccid, lti);
+        return workAssignmentHTML.formatted(scriptSafe(assignmentNode.toString()), scriptSafe(work), ccid, lti);
     }
 	
 	// TODO: When this becomes a template, watch out for %%
@@ -224,9 +228,8 @@ public class Assignment {
 	     <dt>Use this private URL for resuming your work later:</dt>
 	     <dd id="returnToWork"><span id="returnToWorkURL" class="ccurl"></span></dd>  
 	   </dl>
-     <p id="deadline" style="font-weight: bold;"></p>
-     <p id="deadlineLocal" style="font-weight: bold;"></p>
-     <p id="deadlineUTC" style="font-weight: bold;"></p>
+     <div id="deadlines"></div>
+     <p id="deadlineStatus" class="deadline-status"></p>
 	   <label id="savedcopy" style="display: block;"><input type="checkbox"/>  I saved a copy of the private URL</label>
    </div>
    <div id="studentLTIInstructions">
@@ -352,6 +355,8 @@ public class Assignment {
             submissionData.put("score", Assignment.score(assignmentNode, work));
             submissionData.set("submittedAt", work.get("submittedAt"));
             submissionData.put("viewURL", "/private/submission/" + assignmentID + "/" + ccid + "/" + submissionEditKey); 
+            submissionData.put("historyURL", "/private/submissionHistory/" + assignmentID + "/" + editKey + "/" + ccid);
+            submissionData.put("late", isLate(assignmentNode, work.get("submittedAt")));
             submissions.add(submissionData);            
         }
         String allSubmissionsURL = "/lti/allSubmissions?resourceID=" + URLEncoder.encode(assignmentID, "UTF-8");
@@ -379,12 +384,72 @@ public class Assignment {
 </html>    		
 """;
     
+    /**
+     * The full log of a student's submissions (every check, including those after the
+     * deadline) for each problem of an assignment, authorised by the instructor's edit key.
+     */
+    public String submissionHistory(String assignmentID, String editKey, String ccid) throws IOException {
+        ObjectNode assignmentNode = storageConn.readAssignment(assignmentID);
+        if (assignmentNode == null) throw new ServiceException("Assignment not found");
+        if (!editKeyValid(editKey, assignmentNode))
+            throw new ServiceException("Edit key does not match");
+
+        // The submission ID contains the student's edit key, which we find from their work
+        String workID = null;
+        for (String key : storageConn.readAllWork(assignmentID).keySet())
+            if (key.startsWith(ccid + "/")) workID = key;
+        if (workID == null) throw new ServiceException("No work found for " + ccid);
+
+        ArrayNode groups = (ArrayNode) assignmentNode.get("problems");
+        ArrayNode problems = (ArrayNode) groups.get(Math.abs(workID.hashCode()) % groups.size());
+        ArrayNode history = JsonNodeFactory.instance.arrayNode();
+        for (JsonNode problem : problems) {
+            String problemID = problem.has("qid") ? problem.get("qid").asText() : problem.get("URL").asText();
+            ObjectNode problemData = history.addObject();
+            problemData.put("problemID", problemID);
+            ArrayNode submissions = problemData.putArray("submissions");
+            for (ObjectNode submission : storageConn.readAllSubmissions(assignmentID + " " + workID + " " + problemID)) {
+                ObjectNode submissionData = submissions.addObject();
+                submissionData.set("submittedAt", submission.get("submittedAt"));
+                submissionData.set("score", submission.get("score"));
+                submissionData.set("state", submission.get("state"));
+            }
+        }
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("ccid", ccid);
+        if (assignmentNode.has("softDeadline")) data.set("softDeadline", assignmentNode.get("softDeadline"));
+        if (assignmentNode.has("deadline")) data.set("deadline", assignmentNode.get("deadline"));
+        data.set("problems", history);
+        return submissionHistoryHTML.formatted(scriptSafe(data.toString()));
+    }
+
+    private String submissionHistoryHTML = """
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <link rel="stylesheet" href="/assets/codecheck.css"/>
+    <script type="text/javascript">//<![CDATA[
+    const historyData = %s
+    //]]></script>
+    <script src="/assets/util.js" type="text/javascript"></script>
+    <script src="/assets/submissionHistory.js" type="text/javascript"></script>
+    <title>Submission History</title>
+</head>
+<body>
+
+</body>
+</html>
+""";
+
     /*
      * Save existing: request.assignmentID, request.editKey exist
      * New or cloned: Neither request.assignmentID nor request.editKey exist
      */
     public ObjectNode saveAssignment(String prefix, JsonNode params) throws IOException {
         ((ObjectNode) params).set("problems", parseAssignment(params.get("problems").asText()));
+        checkDeadlines(params);
         if (params.has("roster"))
             ((ObjectNode) params).set("roster", parseRoster(params.get("roster").asText()));
         String assignmentID;
@@ -530,7 +595,7 @@ public class Assignment {
     public static double score(JsonNode assignment, ObjectNode work) {
         ArrayNode groups = (ArrayNode) assignment.get("problems");      
         String workID = work.get("workID").asText();
-        ArrayNode problems = (ArrayNode) groups.get(workID.hashCode() % groups.size());
+        ArrayNode problems = (ArrayNode) groups.get(Math.abs(workID.hashCode()) % groups.size());
         ObjectNode submissions = (ObjectNode) work.get("problems");
         double result = 0;
         double sum = 0;
@@ -548,6 +613,36 @@ public class Assignment {
         return sum == 0 ? 0 : result / sum;
     }
     
+    /*
+     * deadline is the hard deadline: no work is saved after it.
+     * softDeadline is optional: work saved after it is marked late.
+     */
+    private static void checkDeadlines(JsonNode params) {
+        Instant softDeadline = null;
+        Instant deadline = null;
+        try {
+            if (params.has("softDeadline")) softDeadline = Instant.parse(params.get("softDeadline").asText());
+            if (params.has("deadline")) deadline = Instant.parse(params.get("deadline").asText());
+        } catch (java.time.format.DateTimeParseException ex) {
+            throw new ServiceException("Invalid deadline: " + ex.getParsedString());
+        }
+        if (softDeadline != null && deadline != null && softDeadline.isAfter(deadline))
+            throw new ServiceException("The soft deadline must not be after the hard deadline");
+    }
+
+    public static boolean isLate(JsonNode assignmentNode, JsonNode submittedAt) {
+        if (submittedAt == null || !assignmentNode.has("softDeadline")) return false;
+        return Instant.parse(submittedAt.asText()).isAfter(Instant.parse(assignmentNode.get("softDeadline").asText()));
+    }
+
+    /**
+     * Makes JSON safe to embed in a script element: escapes < so that student code
+     * or comments containing </script> can't end the element and inject markup.
+     */
+    public static String scriptSafe(String json) {
+        return json.replace("<", "\\u003c");
+    }
+
     private static boolean editKeyValid(String suppliedEditKey, ObjectNode assignmentNode) {
         String storedEditKey = assignmentNode.get("editKey").asText();
         return suppliedEditKey.equals(storedEditKey) && !suppliedEditKey.contains("/");
@@ -565,6 +660,12 @@ public class Assignment {
         String problemID = requestNode.get("tab").asText();
         ObjectNode problemNode = (ObjectNode) requestNode.get("problems").get(problemID);
 
+        if (assignmentNode.has("deadline")) {
+            Instant deadline = Instant.parse(assignmentNode.get("deadline").asText());
+            if (now.isAfter(deadline)) 
+                throw new ServiceException("The deadline of " + deadline + " has passed. Your work was not saved.");
+        }
+
         String submissionID = assignmentID + " " + workID + " " + problemID; 
         ObjectNode submissionNode = JsonNodeFactory.instance.objectNode();
         submissionNode.put("submissionID", submissionID);
@@ -573,12 +674,8 @@ public class Assignment {
         submissionNode.put("score", problemNode.has("score") ? problemNode.get("score").asDouble() : 0.0);
         storageConn.writeSubmission(submissionNode);
         
-        if (assignmentNode.has("deadline")) {
-            Instant deadline = Instant.parse(assignmentNode.get("deadline").asText());
-            if (now.isAfter(deadline)) 
-                throw new ServiceException("After deadline of " + deadline);
-        }
         result.put("submittedAt", now.toString());      
+        result.put("late", isLate(assignmentNode, submissionNode.get("submittedAt")));
 
         storageConn.writeWork(requestNode);        
         return result;

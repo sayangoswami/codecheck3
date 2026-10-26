@@ -238,6 +238,8 @@ window.addEventListener('DOMContentLoaded', () => {
         text: 'Submitted At',
         href: 'javascript:sort_table(3,"D", "mdyhtsp");',
       },
+      { text: 'Late', href: 'javascript:sort_table(4,"T");' },
+      { text: 'History' },
     ];
 
     for (const header of headers) {
@@ -249,6 +251,8 @@ window.addEventListener('DOMContentLoaded', () => {
         a.textContent = header.text;
         th.appendChild(a);
         th.style.display = 'none';
+      } else if (header.href === undefined) {
+        th.textContent = header.text;
       } else {
         const a = document.createElement('a');
         a.href = header.href;
@@ -272,6 +276,17 @@ window.addEventListener('DOMContentLoaded', () => {
       a.target = '_blank';
       a.textContent = new Date(submission.submittedAt).toLocaleString();
       append(tr, 'td', a);
+      if (submission.late) {
+        tr.classList.add('late');
+        append(tr, 'td', 'Late').classList.add('late-label');
+      } else {
+        append(tr, 'td', '');
+      }
+      const historyLink = document.createElement('a');
+      historyLink.href = submission.historyURL;
+      historyLink.target = '_blank';
+      historyLink.textContent = 'History';
+      append(tr, 'td', historyLink);
     }
 
     const rosterDiv = append(body, 'div');

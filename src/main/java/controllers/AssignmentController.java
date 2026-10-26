@@ -201,6 +201,18 @@ public class AssignmentController {
         }
     }
 
+    @GET
+    @jakarta.ws.rs.Path("/private/submissionHistory/{assignmentID}/{editKey}/{ccid}")
+    @Produces(MediaType.TEXT_HTML)
+    public Response instructorViewsSubmissionHistory(@PathParam("assignmentID") String assignmentID, @PathParam("editKey") String editKey, @PathParam("ccid") String ccid) throws IOException {
+        try {
+            String result = assignmentService.submissionHistory(assignmentID, editKey, ccid);
+            return Response.ok(result).build();
+        } catch (ServiceException ex) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(ex.getMessage()).build();
+        }
+    }
+
     @DELETE
     @jakarta.ws.rs.Path("/private/assignment/{assignmentID}/{editKey}")
     @Produces(MediaType.TEXT_PLAIN)

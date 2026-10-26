@@ -195,7 +195,7 @@ public class LTIAssignment {
         String comment = storageConn.readComment(resourceID, workID);
         assignmentNode.put("comment", comment);
         assignmentNode.remove("editKey");
-        return Assignment.workAssignmentHTML.formatted(assignmentNode.toString(), work, workID, "undefined");
+        return Assignment.workAssignmentHTML.formatted(Assignment.scriptSafe(assignmentNode.toString()), Assignment.scriptSafe(work), workID, "undefined");
     }
 
     public String editAssignment(String assignmentID, String editKey) throws IOException {
@@ -274,7 +274,7 @@ public class LTIAssignment {
             assignmentNode.put("sentAt", Instant.now().toString());
             String work = "{ problems: {} }";
             // Show the resource ID for troubleshooting
-            return Assignment.workAssignmentHTML.formatted(assignmentNode.toString(), work, resourceID, "undefined" /* lti */);
+            return Assignment.workAssignmentHTML.formatted(Assignment.scriptSafe(assignmentNode.toString()), work, resourceID, "undefined" /* lti */);
         } else { // Student
             if (assignmentNode == null) throw new ServiceException("Assignment not found");
             ArrayNode groups = (ArrayNode) assignmentNode.get("problems");
@@ -315,7 +315,7 @@ public class LTIAssignment {
             assignmentNode.put("editKeySaved", true);
             assignmentNode.put("sentAt", Instant.now().toString());
 
-            return Assignment.workAssignmentHTML.formatted(assignmentNode.toString(), work, userID, ltiNode.toString());
+            return Assignment.workAssignmentHTML.formatted(Assignment.scriptSafe(assignmentNode.toString()), Assignment.scriptSafe(work), userID, Assignment.scriptSafe(ltiNode.toString()));
         }
     }
 

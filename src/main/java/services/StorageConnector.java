@@ -54,6 +54,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -180,6 +181,10 @@ public class StorageConnector {
         return delegate.readNewestSubmission(submissionID);
     }
 
+    public List<ObjectNode> readAllSubmissions(String submissionID) throws IOException {
+        return delegate.readAllSubmissions(submissionID);
+    }
+
     public Map<String, ObjectNode> readAllWork(String assignmentID) throws IOException {
         return delegate.readAllWork(assignmentID);
     }
@@ -216,6 +221,7 @@ interface StorageConnection {
     ObjectNode readWork(String assignmentID, String workID) throws IOException;
     String readWorkString(String assignmentID, String workID) throws IOException;
     ObjectNode readNewestSubmission(String submissionID) throws IOException;
+    List<ObjectNode> readAllSubmissions(String submissionID) throws IOException; // oldest first
     Map<String, ObjectNode> readAllWork(String assignmentID) throws IOException;
     void writeAssignment(JsonNode node) throws IOException;
     void deleteAssignment(String assignmentID) throws IOException;
@@ -422,6 +428,21 @@ class AWSStorageConnection implements StorageConnection {
 
     public ObjectNode readNewestSubmission(String submissionID) throws JsonProcessingException {
         return readNewestJsonObjectFromDB("CodeCheckSubmissions", "submissionID", submissionID);
+    }
+
+    public List<ObjectNode> readAllSubmissions(String submissionID) throws JsonProcessingException {
+        Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+        expressionAttributeValues.put(":primaryKey", AttributeValue.builder().s(submissionID).build());
+        QueryRequest queryRequest = QueryRequest.builder()
+                .tableName("CodeCheckSubmissions")
+                .keyConditionExpression("submissionID = :primaryKey")
+                .expressionAttributeValues(expressionAttributeValues)
+                .scanIndexForward(true) // oldest first
+                .build();
+        List<ObjectNode> result = new ArrayList<>();
+        for (Map<String, AttributeValue> item : dynamoDbClient.queryPaginator(queryRequest).items())
+            result.add(Util.fromJsonString(EnhancedDocument.fromAttributeValueMap(item).toJson()));
+        return result;
     }
 
     public Map<String, ObjectNode> readAllWork(String assignmentID) throws IOException {
@@ -735,6 +756,23 @@ class LocalStorageConnection implements StorageConnection {
         }
     }
 
+    public List<ObjectNode> readAllSubmissions(String submissionID) throws IOException {
+        Path path = path("CodeCheckSubmissions", submissionID);
+        if (!Files.isDirectory(path)) return new ArrayList<>();
+        List<ObjectNode> result = new ArrayList<>();
+        try (Stream<Path> entries = Files.list(path)) {
+            for (Path file : entries.filter(Files::isRegularFile).sorted().toList()) {
+                String content = Files.readString(file);
+                try {
+                    result.add(Util.fromJsonString(content));
+                } catch (JsonProcessingException ex) {
+                    logger.log(Logger.Level.WARNING, "LocalStorageConnection.readAllSubmissions: cannot read " + file);
+                }
+            }
+        }
+        return result;
+    }
+
     public Map<String, ObjectNode> readAllWork(String assignmentID) throws IOException {
         Map<String, ObjectNode> itemMap = new HashMap<>();
         Path path = path("CodeCheckWork", assignmentID);
@@ -1001,6 +1039,20 @@ DO UPDATE SET contents = EXCLUDED.contents
             throw new IOException(ex);
         }
 
+    }
+
+    public List<ObjectNode> readAllSubmissions(String submissionID) throws IOException {
+        try (Connection conn = config.getDatabaseConnection()) {
+            PreparedStatement ps = conn.prepareStatement(
+                    "SELECT json FROM CodeCheckSubmissions WHERE submissionID = ? ORDER BY submittedAt");
+            ps.setString(1, submissionID);
+            ResultSet rs = ps.executeQuery();
+            List<ObjectNode> result = new ArrayList<>();
+            while (rs.next()) result.add(Util.fromJsonString(rs.getString(1)));
+            return result;
+        } catch (SQLException ex) {
+            throw new IOException(ex);
+        }
     }
 
     public Map<String, ObjectNode> readAllWork(String assignmentID) throws IOException{

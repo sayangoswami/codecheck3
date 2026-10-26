@@ -14,17 +14,22 @@ window.addEventListener('DOMContentLoaded', () => {
     return result
   }
 
-  let field = document.querySelector('#deadlineDate')
-  deadlineDate.addEventListener('input', function() {
-    let date = field.value
-    document.getElementById('deadlineDate').value = date
-    const local = document.getElementById('deadlineLocal')
-    const utc = document.getElementById('deadlineUTC')
+  // A datetime-local input wants local time without a zone, like "2020-12-01T15:59"
+  function toLocalInputValue(isoString) {
+    const date = new Date(isoString)
+    const pad = n => String(n).padStart(2, '0')
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  }
+
+  // prefix is 'deadline' or 'softDeadline'
+  function showDeadline(prefix) {
+    const date = document.getElementById(prefix + 'Date').value
+    const local = document.getElementById(prefix + 'Local')
+    const utc = document.getElementById(prefix + 'UTC')
     if (date === '') {
       local.style.display = "none"
       utc.style.display = "none"
     } else {
-      let date = document.getElementById('deadlineDate').value
       let deadlineLocal = new Date(date)
       let deadlineUTC = new Date(deadlineLocal).toUTCString() 
       local.textContent = deadlineLocal
@@ -32,7 +37,10 @@ window.addEventListener('DOMContentLoaded', () => {
       local.style.display = "block"
       utc.style.display = "block"
     }
-  })
+  }
+
+  for (const prefix of ['deadline', 'softDeadline'])
+    document.getElementById(prefix + 'Date').addEventListener('input', () => showDeadline(prefix))
 
   const responseDiv = document.getElementById('response')
   if ('problems' in assignment)
@@ -40,9 +48,12 @@ window.addEventListener('DOMContentLoaded', () => {
   if ('roster' in assignment)
     document.getElementById('roster').value = assignment.roster.join('\n')
   if (askForDeadline) {
-    if ('deadline' in assignment) { // an ISO 8601 string like "2020-12-01T23:59:59Z"
-      document.getElementById('deadlineDate').value = assignment.deadline
-    } 
+    for (const prefix of ['deadline', 'softDeadline']) {
+      if (prefix in assignment) { // an ISO 8601 string like "2020-12-01T23:59:59Z"
+        document.getElementById(prefix + 'Date').value = toLocalInputValue(assignment[prefix])
+        showDeadline(prefix)
+      }
+    }
   } else {  
     const deadlineDiv = document.getElementById('deadlineDiv')
     deadlineDiv.style.display = 'none'
@@ -57,8 +68,14 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       
     if (askForDeadline) {
-      if(document.getElementById('deadlineDate').value !== ''){
-        request.deadline = new Date(document.getElementById('deadlineDate').value).toISOString()
+      for (const prefix of ['deadline', 'softDeadline']) {
+        const value = document.getElementById(prefix + 'Date').value
+        if (value !== '') request[prefix] = new Date(value).toISOString()
+      }
+      if (request.softDeadline !== undefined && request.deadline !== undefined && request.softDeadline > request.deadline) {
+        responseDiv.textContent = 'The soft deadline must not be after the hard deadline'
+        responseDiv.style.display = 'block'
+        return
       }
     }
     submitButton.disabled = true
