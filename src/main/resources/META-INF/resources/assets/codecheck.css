@@ -391,3 +391,11 @@ tr.closed td {
 .history-table td {
   vertical-align: top;
 }
+
+/* Keep Ace's syntax colors but the history block's own font and background */
+.history-code .ace_static_highlight, .history-code .ace-chrome {
+  font-family: inherit;
+  font-size: inherit;
+  background: transparent;
+  white-space: pre;
+}

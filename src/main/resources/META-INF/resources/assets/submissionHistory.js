@@ -1,14 +1,24 @@
 window.addEventListener('DOMContentLoaded', () => {
-  function appendCode(parent, code, clazz) {
+  if (typeof ace !== 'undefined') ace.config.set('basePath', '/assets/ace')
+  // Colors code like the student's CodeCheck editor (Ace, chrome theme), by file extension
+  function highlightCode(pre, fileName) {
+    if (typeof ace === 'undefined') return
+    const mode = ace.require('ace/ext/modelist').getModeForPath(fileName).mode
+    ace.require('ace/ext/static_highlight')(pre, { mode, theme: 'ace/theme/chrome', showGutter: false, trim: false })
+  }
+
+  // fileName is only given for programming problems, which are syntax colored
+  function appendCode(parent, code, clazz, fileName) {
     const pre = append(parent, 'pre', code)
     pre.classList.add('history-code')
     if (clazz !== undefined) pre.classList.add(clazz)
+    if (fileName !== undefined) highlightCode(pre, fileName)
   }
 
   // Code problems store each file as a list of the student's edited regions,
   // with fixed code (shown as ⋮) between them
-  function appendRegions(parent, regions) {
-    appendCode(parent, regions.join('\n⋮\n'))
+  function appendRegions(parent, regions, fileName) {
+    appendCode(parent, regions.join('\n⋮\n'), undefined, fileName)
   }
 
   // Parsons problems store the arranged tiles (left, in sections between fixed code)
@@ -53,9 +63,9 @@ window.addEventListener('DOMContentLoaded', () => {
       append(parent, 'h4', name)
       const content = work[name]
       if (typeof content === 'string')
-        appendCode(parent, content)
+        appendCode(parent, content, undefined, name)
       else if (Array.isArray(content) && content.every(region => typeof region === 'string'))
-        appendRegions(parent, content)
+        appendRegions(parent, content, name)
       else if (content !== null && typeof content === 'object' && Array.isArray(content.left))
         appendParsons(parent, content)
       else if (content !== null && typeof content === 'object')

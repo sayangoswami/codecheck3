@@ -443,6 +443,9 @@ public class Assignment {
     const historyData = %s
     //]]></script>
     <script src="/assets/util.js" type="text/javascript"></script>
+    <script src="/assets/ace/ace.js" type="text/javascript"></script>
+    <script src="/assets/ace/ext-modelist.js" type="text/javascript"></script>
+    <script src="/assets/ace/ext-static_highlight.js" type="text/javascript"></script>
     <script src="/assets/submissionHistory.js" type="text/javascript"></script>
     <title>Submission History</title>
 </head>
