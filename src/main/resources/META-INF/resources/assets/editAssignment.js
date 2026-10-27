@@ -89,6 +89,10 @@ window.addEventListener('DOMContentLoaded', () => {
         showDeadline(prefix)
       }
     }
+    if ('latePenalty' in assignment)
+      document.getElementById('latePenalty').value = +(assignment.latePenalty * 100).toFixed(4)
+    if ('lateGraceHours' in assignment)
+      document.getElementById('lateGraceHours').value = assignment.lateGraceHours
     for (const ccid in assignment.extensions ?? {})
       addExtensionRow(ccid, assignment.extensions[ccid])
     document.getElementById('addExtensionDiv').appendChild(createButton('hc-command', 'Add extension', () => addExtensionRow()))
@@ -115,6 +119,11 @@ window.addEventListener('DOMContentLoaded', () => {
         responseDiv.style.display = 'block'
         return
       }
+      // The server checks the values
+      const latePenalty = document.getElementById('latePenalty').value
+      if (latePenalty !== '') request.latePenalty = Number(latePenalty) / 100
+      const lateGraceHours = document.getElementById('lateGraceHours').value
+      if (lateGraceHours !== '') request.lateGraceHours = Number(lateGraceHours)
       try {
         const extensions = readExtensions()
         if (Object.keys(extensions).length > 0) request.extensions = extensions

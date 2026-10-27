@@ -87,6 +87,14 @@ window.addEventListener('DOMContentLoaded', () => {
     append(body, 'p', 'Soft deadline: ' + softDeadline.toLocaleString())
   if (deadline !== undefined)
     append(body, 'p', (historyData.extension ? 'Extended deadline: ' : softDeadline === undefined ? 'Deadline: ' : 'Hard deadline: ') + deadline.toLocaleString())
+  const hasPenalty = softDeadline !== undefined && historyData.latePenalty !== undefined
+  if (hasPenalty) {
+    const grace = historyData.lateGraceHours ?? 0
+    append(body, 'p', `Late penalty: ${percent(historyData.latePenalty)} per started day after the soft deadline`
+      + (grace > 0 ? `, after a grace period of ${grace} hours` : ''))
+  }
+  // Only show what each check counts as when that can differ from its score
+  const showCounts = hasPenalty || deadline !== undefined
 
   for (const problem of historyData.problems) {
     append(body, 'h2', problem.problemID)
@@ -98,22 +106,23 @@ window.addEventListener('DOMContentLoaded', () => {
     const table = append(body, 'table')
     table.classList.add('history-table')
     const tr = append(table, 'tr')
-    for (const header of ['#', 'Submitted At', 'Score', 'Submission'])
+    for (const header of showCounts ? ['#', 'Submitted At', 'Score', 'Counts As', 'Submission'] : ['#', 'Submitted At', 'Score', 'Submission'])
       append(tr, 'th', header)
     problem.submissions.forEach((submission, i) => {
       const row = append(table, 'tr')
       append(row, 'td', '' + (i + 1))
       const submittedAt = new Date(submission.submittedAt)
       const whenCell = append(row, 'td', submittedAt.toLocaleString())
-      // Only older submissions can be after the hard deadline, from before it was enforced
+      // Checks after the hard deadline are logged, but don't count
       if (deadline !== undefined && submittedAt > deadline) {
         row.classList.add('closed')
-        append(whenCell, 'span', ' (after hard deadline)').classList.add('closed-label')
+        append(whenCell, 'span', ' (after deadline, not counted)').classList.add('closed-label')
       } else if (softDeadline !== undefined && submittedAt > softDeadline) {
         row.classList.add('late')
         append(whenCell, 'span', ' (late)').classList.add('late-label')
       }
       append(row, 'td', percent(submission.score))
+      if (showCounts) append(row, 'td', submission.counts === undefined ? 'Not counted' : percent(submission.counts))
       const details = append(append(row, 'td'), 'details')
       append(details, 'summary', 'Show')
       appendState(details, submission.state)

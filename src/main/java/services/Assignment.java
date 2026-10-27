@@ -24,8 +24,11 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -97,17 +100,22 @@ public class Assignment {
  <label style="display: block;" for="roster">Allowed CodeCheck IDs, one per line (leave blank to allow any ID a student types in):</label>
  <textarea style="display: block; width: 90%%;" id="roster" rows="10"></textarea>
  <div id="deadlineDiv">
-    <label style="display: block;" for="softDeadlineDate">Soft deadline (<b>Local Time</b>), work saved after it is marked late:</label>
+    <label style="display: block;" for="softDeadlineDate">Soft deadline (<b>Local Time</b>), students can still work after it, but their work is late and loses the late penalty:</label>
     <input type="datetime-local" id="softDeadlineDate" name="softDate"/>
     <p id="softDeadlineLocal" style="font-weight: bold;"></p>
     <p id="softDeadlineUTC" style="font-weight: bold;"></p>
-    <label style="display: block;" for="deadlineDate">Hard deadline (<b>Local Time</b>), no work is accepted after it:</label>
+    <label style="display: block;" for="latePenalty">Late penalty, in percentage points per started day late (blank for none):</label>
+    <input type="number" id="latePenalty" min="0" max="100" step="any"/>
+    <label style="display: block;" for="lateGraceHours">Grace period, in hours after the soft deadline before the late penalty starts (blank for none):</label>
+    <input type="number" id="lateGraceHours" min="0" step="any"/>
+    <p>Each problem counts its best attempt after the penalty, so a late attempt never lowers a score.</p>
+    <label style="display: block;" for="deadlineDate">Hard deadline (<b>Local Time</b>), students can't work on the assignment after it:</label>
     <input type="datetime-local" id="deadlineDate" name="date"/>
     <p id="deadlineLocal" style="font-weight: bold;"></p>
     <p id="deadlineUTC" style="font-weight: bold;"></p>
     <p>Leave a date blank for no deadline of that kind.</p>
     <h3>Deadline extensions</h3>
-    <p>A student with an extension gets their own deadline (<b>Local Time</b>) instead of both deadlines above. Leave the date blank for no deadline at all.</p>
+    <p>A student with an extension gets their own hard deadline (<b>Local Time</b>), with no late penalty, instead of both deadlines above. Leave the date blank for no deadline at all.</p>
     <div id="extensions"></div>
     <div id="addExtensionDiv"></div>
  </div>
@@ -357,24 +365,41 @@ public class Assignment {
 
         ArrayNode submissions = JsonNodeFactory.instance.arrayNode();
 
-        Map<String, ObjectNode> itemMap = storageConn.readAllWork(assignmentID); 
+        Map<String, ObjectNode> itemMap = new LinkedHashMap<>(storageConn.readAllWork(assignmentID));
+        // Before late checks were logged with empty work, a student who only checked after
+        // the deadline has logged checks but no work. Roster IDs are their own edit keys.
+        if (assignmentNode.has("roster")) {
+            for (JsonNode id : assignmentNode.get("roster")) {
+                String ccid = id.asText();
+                if (itemMap.keySet().stream().noneMatch(key -> key.startsWith(ccid + "/")))
+                    itemMap.put(ccid + "/" + ccid, null);
+            }
+        }
 
         for (String submissionKey : itemMap.keySet()) {
             String[] parts = submissionKey.split("/");
             String ccid = parts[0];
             String submissionEditKey = parts[1];
-            
+
             ObjectNode work = itemMap.get(submissionKey);
             ObjectNode studentAssignmentNode = withExtension(assignmentNode, ccid);
+            ArrayNode problems = problemsOf(studentAssignmentNode, submissionKey);
+            Map<String, List<ObjectNode>> log = readLog(assignmentID, submissionKey, problems);
+            List<ObjectNode> checks = log.values().stream().flatMap(List::stream).toList();
+            if (work == null && checks.isEmpty()) continue;
+            Instant deadline = deadline(studentAssignmentNode);
+            JsonNode submittedAt = work != null ? work.get("submittedAt")
+                : checks.stream().map(check -> check.get("submittedAt")).max((a, b) -> Instant.parse(a.asText()).compareTo(Instant.parse(b.asText()))).get();
             ObjectNode submissionData = JsonNodeFactory.instance.objectNode();
             submissionData.put("opaqueID", ccid);
-            submissionData.put("score", bestScore(studentAssignmentNode, submissionKey, work));
-            submissionData.set("submittedAt", work.get("submittedAt"));
-            submissionData.put("viewURL", "/private/submission/" + assignmentID + "/" + ccid + "/" + submissionEditKey); 
+            submissionData.put("score", weightedScore(problems, bestScores(studentAssignmentNode, problems, log, work)));
+            submissionData.set("submittedAt", submittedAt);
+            submissionData.put("viewURL", "/private/submission/" + assignmentID + "/" + ccid + "/" + submissionEditKey);
             submissionData.put("historyURL", "/private/submissionHistory/" + assignmentID + "/" + editKey + "/" + ccid);
-            submissionData.put("late", isLate(studentAssignmentNode, work.get("submittedAt")));
+            submissionData.put("late", isLate(studentAssignmentNode, submittedAt));
+            submissionData.put("lateChecks", checks.stream().filter(check -> afterDeadline(deadline, check)).count());
             submissionData.put("extension", studentAssignmentNode.has("hasExtension"));
-            submissions.add(submissionData);            
+            submissions.add(submissionData);
         }
         String allSubmissionsURL = "/lti/allSubmissions?resourceID=" + URLEncoder.encode(assignmentID, "UTF-8");
         return viewSubmissionsHTML.formatted(allSubmissionsURL, submissions.toString());    
@@ -411,16 +436,17 @@ public class Assignment {
         if (!editKeyValid(editKey, assignmentNode))
             throw new ServiceException("Edit key does not match");
 
-        // The submission ID contains the student's edit key, which we find from their work
-        String workID = null;
+        // The submission ID contains the student's edit key, which we find from their work.
+        // Without work (see viewSubmissions), the student's ID is their edit key.
+        String workID = ccid + "/" + ccid;
         for (String key : storageConn.readAllWork(assignmentID).keySet())
             if (key.startsWith(ccid + "/")) workID = key;
-        if (workID == null) throw new ServiceException("No work found for " + ccid);
         assignmentNode = withExtension(assignmentNode, ccid);
 
-        ArrayNode groups = (ArrayNode) assignmentNode.get("problems");
-        ArrayNode problems = (ArrayNode) groups.get(Math.abs(workID.hashCode()) % groups.size());
-        Map<String, Double> bestScores = bestScores(assignmentNode, problems, workID, storageConn.readWork(assignmentID, workID));
+        ArrayNode problems = problemsOf(assignmentNode, workID);
+        Map<String, List<ObjectNode>> log = readLog(assignmentID, workID, problems);
+        Map<String, Double> bestScores = bestScores(assignmentNode, problems, log, storageConn.readWork(assignmentID, workID));
+        Instant deadline = deadline(assignmentNode);
         ArrayNode history = JsonNodeFactory.instance.arrayNode();
         for (JsonNode problem : problems) {
             String problemID = problemKey(problem);
@@ -428,18 +454,20 @@ public class Assignment {
             problemData.put("problemID", problemID);
             problemData.put("best", bestScores.get(problemID));
             ArrayNode submissions = problemData.putArray("submissions");
-            for (ObjectNode submission : storageConn.readAllSubmissions(assignmentID + " " + workID + " " + problemID)) {
+            for (ObjectNode submission : log.get(problemID)) {
                 ObjectNode submissionData = submissions.addObject();
                 submissionData.set("submittedAt", submission.get("submittedAt"));
                 submissionData.set("score", submission.get("score"));
+                // The score after the late penalty, or none after the hard deadline
+                if (!afterDeadline(deadline, submission)) submissionData.put("counts", penalized(assignmentNode, submission));
                 submissionData.set("state", submission.get("state"));
             }
         }
         ObjectNode data = JsonNodeFactory.instance.objectNode();
         data.put("ccid", ccid);
         data.put("score", weightedScore(problems, bestScores));
-        if (assignmentNode.has("softDeadline")) data.set("softDeadline", assignmentNode.get("softDeadline"));
-        if (assignmentNode.has("deadline")) data.set("deadline", assignmentNode.get("deadline"));
+        for (String name : new String[] { "softDeadline", "deadline", "latePenalty", "lateGraceHours" })
+            if (assignmentNode.has(name)) data.set(name, assignmentNode.get(name));
         data.put("extension", assignmentNode.has("hasExtension"));
         data.set("problems", history);
         return submissionHistoryHTML.formatted(scriptSafe(data.toString()));
@@ -622,26 +650,81 @@ public class Assignment {
         return problem.has("qid") ? problem.get("qid").asText() : problem.get("URL").asText();
     }
 
+    private static ArrayNode problemsOf(ObjectNode assignmentNode, String workID) {
+        ArrayNode groups = (ArrayNode) assignmentNode.get("problems");
+        return (ArrayNode) groups.get(Math.abs(workID.hashCode()) % groups.size());
+    }
+
+    private static Instant deadline(ObjectNode assignmentNode) {
+        return assignmentNode.has("deadline") ? Instant.parse(assignmentNode.get("deadline").asText()) : null;
+    }
+
+    private static boolean afterDeadline(Instant deadline, ObjectNode submission) {
+        return deadline != null && Instant.parse(submission.get("submittedAt").asText()).isAfter(deadline);
+    }
+
     /*
-     * The best score for each problem (by problemKey) in the student's group: the maximum
-     * over all logged submissions up to the hard deadline and the saved work. Submissions
-     * after the hard deadline are only in the log from before it was enforced, and don't count.
+     * The logged submissions (every check, oldest first) for each problem (by problemKey)
      */
+    private Map<String, List<ObjectNode>> readLog(String assignmentID, String workID, ArrayNode problems) throws IOException {
+        Map<String, List<ObjectNode>> result = new LinkedHashMap<>();
+        for (JsonNode problem : problems) {
+            String key = problemKey(problem);
+            result.put(key, storageConn.readAllSubmissions(assignmentID + " " + workID + " " + key));
+        }
+        return result;
+    }
+
     private Map<String, Double> bestScores(ObjectNode assignmentNode, ArrayNode problems, String workID, ObjectNode work) throws IOException {
         String assignmentID = assignmentNode.get("assignmentID").asText();
-        Instant deadline = assignmentNode.has("deadline") ? Instant.parse(assignmentNode.get("deadline").asText()) : null;
+        return bestScores(assignmentNode, problems, readLog(assignmentID, workID, problems), work);
+    }
+
+    private static final long DAY_MILLIS = 24 * 60 * 60 * 1000;
+
+    /*
+     * The score that counts for a check at submittedAt. After the soft deadline and the grace
+     * period (lateGraceHours), latePenalty (a fraction of the full score) is deducted for each
+     * started day. Mirrors penalized in workAssignment.js.
+     */
+    static double penalized(JsonNode assignmentNode, double score, Instant submittedAt) {
+        if (!assignmentNode.has("softDeadline") || !assignmentNode.has("latePenalty")) return score;
+        long graceMillis = Math.round(assignmentNode.path("lateGraceHours").asDouble() * 60 * 60 * 1000);
+        Instant start = Instant.parse(assignmentNode.get("softDeadline").asText()).plusMillis(graceMillis);
+        if (!submittedAt.isAfter(start)) return score;
+        long days = (Duration.between(start, submittedAt).toMillis() + DAY_MILLIS - 1) / DAY_MILLIS;
+        return Math.max(0, score - days * assignmentNode.get("latePenalty").asDouble());
+    }
+
+    private static double penalized(JsonNode assignmentNode, ObjectNode submission) {
+        return penalized(assignmentNode, submission.get("score").asDouble(), Instant.parse(submission.get("submittedAt").asText()));
+    }
+
+    /*
+     * The best score for each problem (by problemKey) in the student's group: the maximum
+     * over all logged submissions up to the hard deadline and the saved work, each less its
+     * late penalty. Checks after the hard deadline are logged, so that the instructor sees
+     * them, but don't count.
+     */
+    private static Map<String, Double> bestScores(ObjectNode assignmentNode, ArrayNode problems, Map<String, List<ObjectNode>> log, ObjectNode work) {
+        Instant deadline = deadline(assignmentNode);
         Map<String, Double> result = new HashMap<>();
         for (JsonNode problem : problems) {
             String key = problemKey(problem);
             double best = 0;
-            for (ObjectNode submission : storageConn.readAllSubmissions(assignmentID + " " + workID + " " + key)) {
-                if (deadline == null || !Instant.parse(submission.get("submittedAt").asText()).isAfter(deadline))
-                    best = Math.max(best, submission.get("score").asDouble());
+            for (ObjectNode submission : log.get(key)) {
+                if (!afterDeadline(deadline, submission))
+                    best = Math.max(best, penalized(assignmentNode, submission));
             }
             if (work != null && work.has("problems")) {
+                // The work was saved at work.submittedAt or, for this problem, earlier.
+                // Any earlier score with a smaller penalty is in the log.
+                Instant savedAt = work.has("submittedAt") ? Instant.parse(work.get("submittedAt").asText()) : null;
                 for (String workKey : Util.iterable(work.get("problems").fieldNames()))
-                    if (isProblemKeyFor(workKey, (ObjectNode) problem))
-                        best = Math.max(best, work.get("problems").get(workKey).path("score").asDouble());
+                    if (isProblemKeyFor(workKey, (ObjectNode) problem)) {
+                        double score = work.get("problems").get(workKey).path("score").asDouble();
+                        best = Math.max(best, savedAt == null ? score : penalized(assignmentNode, score, savedAt));
+                    }
             }
             result.put(key, best);
         }
@@ -657,12 +740,6 @@ public class Assignment {
             result += weight * scores.getOrDefault(problemKey(problem), 0.0);
         }
         return sum == 0 ? 0 : result / sum;
-    }
-
-    private double bestScore(ObjectNode assignmentNode, String workID, ObjectNode work) throws IOException {
-        ArrayNode groups = (ArrayNode) assignmentNode.get("problems");
-        ArrayNode problems = (ArrayNode) groups.get(Math.abs(workID.hashCode()) % groups.size());
-        return weightedScore(problems, bestScores(assignmentNode, problems, workID, work));
     }
 
     public static double score(JsonNode assignment, ObjectNode work) {
@@ -687,10 +764,24 @@ public class Assignment {
     }
     
     /*
-     * deadline is the hard deadline: no work is saved after it.
-     * softDeadline is optional: work saved after it is marked late.
+     * deadline is the hard deadline: no work is saved after it, and checks after it are only logged.
+     * softDeadline: work saved after it is late, and loses latePenalty (a fraction of the full
+     * score) per started day after the grace period of lateGraceHours. All are optional.
      */
     private static void checkDeadlines(JsonNode params) {
+        if (params.has("latePenalty")) {
+            double latePenalty = params.get("latePenalty").asDouble(-1);
+            if (!params.get("latePenalty").isNumber() || latePenalty < 0 || latePenalty > 1)
+                throw new ServiceException("The late penalty must be between 0% and 100%");
+            if (!params.has("softDeadline"))
+                throw new ServiceException("A late penalty needs a soft deadline");
+        }
+        if (params.has("lateGraceHours")) {
+            if (!params.get("lateGraceHours").isNumber() || params.get("lateGraceHours").asDouble() < 0)
+                throw new ServiceException("The grace period must be 0 or more hours");
+            if (!params.has("latePenalty"))
+                throw new ServiceException("A grace period needs a late penalty");
+        }
         Instant softDeadline = null;
         Instant deadline = null;
         try {
@@ -772,21 +863,32 @@ public class Assignment {
         String problemID = requestNode.get("tab").asText();
         ObjectNode problemNode = (ObjectNode) requestNode.get("problems").get(problemID);
 
-        if (assignmentNode.has("deadline")) {
-            Instant deadline = Instant.parse(assignmentNode.get("deadline").asText());
-            if (now.isAfter(deadline)) 
-                throw new ServiceException("The deadline of " + deadline + " has passed. Your work was not saved.");
-        }
-
-        String submissionID = assignmentID + " " + workID + " " + problemID; 
+        String submissionID = assignmentID + " " + workID + " " + problemID;
         ObjectNode submissionNode = JsonNodeFactory.instance.objectNode();
         submissionNode.put("submissionID", submissionID);
         submissionNode.put("submittedAt", now.toString());
         submissionNode.put("state", problemNode.has("state") ? problemNode.get("state").toString() : null);
         submissionNode.put("score", problemNode.has("score") ? problemNode.get("score").asDouble() : 0.0);
         storageConn.writeSubmission(submissionNode);
-        
-        result.put("submittedAt", now.toString());      
+        result.put("submittedAt", now.toString());
+
+        // After the hard deadline, the check is logged so that the instructor sees everything
+        // the student saw, but it isn't saved as work, and bestScores doesn't count it
+        Instant deadline = deadline(assignmentNode);
+        if (deadline != null && now.isAfter(deadline)) {
+            result.put("afterDeadline", true);
+            // Empty work, so that the student is listed in viewSubmissions
+            if (storageConn.readWork(assignmentID, workID) == null) {
+                ObjectNode emptyWork = JsonNodeFactory.instance.objectNode();
+                emptyWork.put("assignmentID", assignmentID);
+                emptyWork.put("workID", workID);
+                emptyWork.putObject("problems");
+                emptyWork.put("submittedAt", now.toString());
+                storageConn.writeWork(emptyWork);
+            }
+            return result;
+        }
+
         result.put("late", isLate(assignmentNode, submissionNode.get("submittedAt")));
 
         storageConn.writeWork(requestNode);        

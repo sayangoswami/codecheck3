@@ -276,7 +276,11 @@ window.addEventListener('DOMContentLoaded', () => {
       a.target = '_blank';
       a.textContent = new Date(submission.submittedAt).toLocaleString();
       append(tr, 'td', a);
-      if (submission.late) {
+      if (submission.lateChecks > 0) {
+        tr.classList.add('closed');
+        const checks = submission.lateChecks === 1 ? '1 check' : submission.lateChecks + ' checks';
+        append(tr, 'td', checks + ' after deadline (not counted)').classList.add('closed-label');
+      } else if (submission.late) {
         tr.classList.add('late');
         append(tr, 'td', 'Late').classList.add('late-label');
       } else if (submission.extension) {

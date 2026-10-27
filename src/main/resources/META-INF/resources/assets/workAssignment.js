@@ -39,18 +39,18 @@ window.addEventListener('DOMContentLoaded', () => {
       if (p.weight > 0) {
         sum += p.weight
         // really want let score = work.problems[problemKey(p)].score
-        for (const key in work.problems) {
-          if (isProblemKeyFor(key, p)) { 
-            // The best attempt counts, not the latest
-            let score = Math.max(work.problems[key].score, bestScore(p))
-            updateScoreInProblemSelector(i, score)
-            result += p.weight * score
-            if (explanation !== '') explanation += ' + '
-            explanation += percent(score)
-            if (p.weight !== 1) explanation += '×' + p.weight.toFixed(2).replace(/\.?0+$/, '')
-          }
+        const attempted = Object.keys(work.problems).some(key => isProblemKeyFor(key, p))
+        if (attempted || bestScore(p) > 0) {
+          // The best attempt after any late penalty counts, not the latest
+          let score = assignment.bestScores !== undefined ? bestScore(p)
+            : work.problems[Object.keys(work.problems).find(key => isProblemKeyFor(key, p))].score
+          updateScoreInProblemSelector(i, score)
+          result += p.weight * score
+          if (explanation !== '') explanation += ' + '
+          explanation += percent(score)
+          if (p.weight !== 1) explanation += '×' + p.weight.toFixed(2).replace(/\.?0+$/, '')
         }
-      }          
+      }
     }
     if (explanation !== '' && sum !== 1) 
       explanation = '(' + explanation + ') / ' + sum.toFixed(2).replace(/\.?0+$/, '')
@@ -92,13 +92,47 @@ window.addEventListener('DOMContentLoaded', () => {
     return name in assignment && serverNow() > new Date(assignment[name])
   }
 
+  const HOUR_MILLIS = 60 * 60 * 1000
+  const DAY_MILLIS = 24 * HOUR_MILLIS
+
+  // When the late penalty starts, or undefined if there is none
+  function penaltyStart() {
+    if (!('softDeadline' in assignment && 'latePenalty' in assignment)) return undefined
+    return new Date(Date.parse(assignment.softDeadline) + Math.round((assignment.lateGraceHours ?? 0) * HOUR_MILLIS))
+  }
+
+  // The fraction of the full score deducted at the given time. Mirrors Assignment.penalized
+  function penaltyAt(time) {
+    const start = penaltyStart()
+    if (start === undefined || time <= start) return 0
+    return Math.ceil((time - start) / DAY_MILLIS) * assignment.latePenalty
+  }
+
+  function penalized(score, time) {
+    return Math.max(0, score - penaltyAt(time))
+  }
+
+  function describePenalty() {
+    const grace = assignment.lateGraceHours ?? 0
+    return `${percent(assignment.latePenalty)} of the full score is deducted for each started day late`
+      + (grace > 0 ? `, after a grace period of ${grace} ${grace === 1 ? 'hour' : 'hours'}` : '')
+  }
+
   function updateDeadlineStatus() {
     const status = document.getElementById('deadlineStatus')
     if (pastDeadline('deadline')) {
-      status.textContent = 'The deadline has passed. Your work is no longer saved.'
+      status.textContent = 'The final deadline has passed. You can no longer work on this assignment.'
       status.className = 'deadline-status closed'
+      // Problems stay visible, but can't be changed or checked
+      for (const iframe of document.getElementsByClassName('exercise-iframe')) iframe.inert = true
     } else if (pastDeadline('softDeadline')) {
-      status.textContent = 'The deadline has passed. Work you save now is marked late.'
+      const now = serverNow()
+      if (penaltyStart() === undefined)
+        status.textContent = 'The deadline has passed. Work you save now is marked late.'
+      else if (now <= penaltyStart())
+        status.textContent = `The deadline has passed. Work you save until ${penaltyStart().toLocaleString()} has no late penalty. After that, ${describePenalty()}.`
+      else
+        status.textContent = `The deadline has passed. Your work is late: ${percent(penaltyAt(now))} is deducted from scores you get now, and more each day. Your earlier, better scores still count.`
       status.className = 'deadline-status late'
     } else {
       status.textContent = ''
@@ -108,29 +142,56 @@ window.addEventListener('DOMContentLoaded', () => {
 
   async function sendScoreAndState(iframe, score, state) {    
     if (!assignment.isStudent) return // Viewing as instructor
+    let key = iframeKey.get(iframe)
+    const afterDeadlineMessage = 'The final deadline has passed. This check does not count toward your score.'
     if (pastDeadline('deadline')) {
+      // Only from a check that was started before the problems were locked. Sent so that
+      // the instructor sees it, but kept out of the work and the score
       updateDeadlineStatus()
-      responseDiv.textContent = 'The deadline has passed. This work was not saved.'
+      const lateWork = { ...work, tab: key, problems: { ...work.problems, [key]: { score, state } }, submittedAt: serverNow().toISOString() }
+      try {
+        if (lti !== undefined) await postData("/lti/saveWork", { ...lti, work: lateWork })
+        else await postData("/saveWork", lateWork)
+        responseDiv.textContent = afterDeadlineMessage
+      } catch (e) {
+        responseDiv.textContent = e.message
+      }
       return
     }
-    let key = iframeKey.get(iframe)  
     // Don't want qid which is also in request.param
+    const previous = { work: work.problems[key], best: assignment.bestScores?.[key] }
+    const now = serverNow()
+    const counts = penalized(score, now)
     work.problems[key] = { score, state }
     if (assignment.bestScores !== undefined)
-      assignment.bestScores[key] = Math.max(assignment.bestScores[key] ?? 0, score)
-    updateScoreDisplay();     
+      assignment.bestScores[key] = Math.max(assignment.bestScores[key] ?? 0, counts)
+    updateScoreDisplay();
     try {
-      responseDiv.textContent = ''
-      work.submittedAt = serverNow().toISOString()
+      responseDiv.textContent = counts < score
+        ? `This check is late, so ${percent(score)} counts as ${percent(counts)}. Your best score on this problem is ${percent(assignment.bestScores?.[key] ?? counts)}.`
+        : ''
+      work.submittedAt = now.toISOString()
+      let result
       if (lti !== undefined) {
         lti.work = work
-        await postData("/lti/saveWork", lti)
+        result = await postData("/lti/saveWork", lti)
       } else {
-        await postData("/saveWork", work)
+        result = await postData("/saveWork", work)
+      }
+      if (result?.afterDeadline) { // The deadline passed while this was sent
+        if (previous.work === undefined) delete work.problems[key]
+        else work.problems[key] = previous.work
+        if (assignment.bestScores !== undefined) {
+          if (previous.best === undefined) delete assignment.bestScores[key]
+          else assignment.bestScores[key] = previous.best
+        }
+        updateScoreDisplay()
+        updateDeadlineStatus()
+        responseDiv.textContent = afterDeadlineMessage
       }
     } catch (e) {
-      responseDiv.textContent = e.message 
-    }  
+      responseDiv.textContent = e.message
+    }
   }
   
   // Problem selection
@@ -289,9 +350,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
   if (assignment.isStudent) {
     const deadlinesDiv = document.getElementById('deadlines')
+    const softLabel = penaltyStart() === undefined ? 'Deadline (work saved later is marked late):'
+      : `Deadline (after it, ${describePenalty()}):`
     const deadlineLabels = 'softDeadline' in assignment
-      ? { softDeadline: 'Deadline (work saved later is marked late):', deadline: 'Final deadline (no work saved later):' }
-      : { deadline: 'Deadline:' }
+      ? { softDeadline: softLabel, deadline: 'Final deadline (you can no longer work on the assignment after it):' }
+      : { deadline: 'Deadline (you can no longer work on the assignment after it):' }
     for (const name in deadlineLabels) {
       if (name in assignment) {
         append(deadlinesDiv, 'p', deadlineLabels[name]).style.fontWeight = 'bold'
