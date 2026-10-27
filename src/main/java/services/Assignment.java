@@ -115,7 +115,7 @@ public class Assignment {
     <p id="deadlineUTC" style="font-weight: bold;"></p>
     <p>Leave a date blank for no deadline of that kind.</p>
     <h3>Deadline extensions</h3>
-    <p>A student with an extension gets their own hard deadline (<b>Local Time</b>), with no late penalty, instead of both deadlines above. Leave the date blank for no deadline at all.</p>
+    <p>A student with an extension gets their own hard deadline (<b>Local Time</b>) instead of the one above. The soft deadline and late penalty still apply. Leave the date blank for no hard deadline.</p>
     <div id="extensions"></div>
     <div id="addExtensionDiv"></div>
  </div>
@@ -716,10 +716,12 @@ public class Assignment {
                 if (!afterDeadline(deadline, submission))
                     best = Math.max(best, penalized(assignmentNode, submission));
             }
-            if (work != null && work.has("problems")) {
+            Instant savedAt = work != null && work.has("submittedAt") ? Instant.parse(work.get("submittedAt").asText()) : null;
+            // Work saved after the hard deadline doesn't count. That happens when the deadline
+            // was moved earlier after the student saved. Its on-time scores are in the log.
+            if (work != null && work.has("problems") && (deadline == null || savedAt == null || !savedAt.isAfter(deadline))) {
                 // The work was saved at work.submittedAt or, for this problem, earlier.
                 // Any earlier score with a smaller penalty is in the log.
-                Instant savedAt = work.has("submittedAt") ? Instant.parse(work.get("submittedAt").asText()) : null;
                 for (String workKey : Util.iterable(work.get("problems").fieldNames()))
                     if (isProblemKeyFor(workKey, (ObjectNode) problem)) {
                         double score = work.get("problems").get(workKey).path("score").asDouble();
@@ -796,14 +798,13 @@ public class Assignment {
 
     /*
      * The assignment as it applies to one student. extensions maps student IDs to their own
-     * deadline (an ISO 8601 string, or null for no deadline), which replaces both the soft and
-     * the hard deadline. The result has hasExtension set if the student has an extension.
+     * hard deadline (an ISO 8601 string, or null for none). The soft deadline and late penalty
+     * still apply. The result has hasExtension set if the student has an extension.
      */
     private static ObjectNode withExtension(ObjectNode assignmentNode, String ccid) {
         JsonNode extensions = assignmentNode.get("extensions");
         if (ccid == null || extensions == null || !extensions.has(ccid)) return assignmentNode;
         ObjectNode result = assignmentNode.deepCopy();
-        result.remove("softDeadline");
         result.remove("deadline");
         if (!extensions.get(ccid).isNull()) result.set("deadline", extensions.get(ccid));
         result.put("hasExtension", true);
@@ -824,11 +825,14 @@ public class Assignment {
             }
             JsonNode deadline = extensions.get(ccid);
             if (deadline.isNull()) continue;
+            Instant extended;
             try {
-                Instant.parse(deadline.asText());
+                extended = Instant.parse(deadline.asText());
             } catch (java.time.format.DateTimeParseException ex) {
                 throw new ServiceException("Invalid extension deadline for " + ccid);
             }
+            if (params.has("softDeadline") && extended.isBefore(Instant.parse(params.get("softDeadline").asText())))
+                throw new ServiceException("The extension for " + ccid + " must not be before the soft deadline");
         }
     }
 
